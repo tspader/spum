@@ -465,7 +465,7 @@ void dn_hash_encode_base64(char* destination, const char* source, size_t len) {
   int valb = -6;
 
   int i = 0;
-  for (i; i < len; ++i) {
+  for (; i < len; ++i) {
     val = (val << 8) + source[i];
     valb += 8;
     while (valb >= 0) {
