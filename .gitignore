@@ -1,3 +1,4 @@
 .vscode
 build/*
-!build/build.bat
+!build/build-server.sh
+!build/build-utils.sh

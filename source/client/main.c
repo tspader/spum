@@ -1,18 +1,38 @@
-// #include "KHR/khrplatform.h"
-// #include "glad/glad.h"
+#include "emscripten/emscripten.h"
+#include "emscripten/websocket.h"
 
-#define SOKOL_GFX_IMPL
+#define NK_INCLUDE_FIXED_TYPES
+#define NK_INCLUDE_STANDARD_IO
+#define NK_INCLUDE_DEFAULT_ALLOCATOR
+#define NK_INCLUDE_VERTEX_BUFFER_OUTPUT
+#define NK_INCLUDE_FONT_BAKING
+#define NK_INCLUDE_DEFAULT_FONT
+#define NK_INCLUDE_STANDARD_VARARGS
+
+// #define NK_INCLUDE_STANDARD_BOOL
+// #define NK_INCLUDE_COMMAND_USERDATA
+// #define NK_UINT_DRAW_INDEX
+#define NK_IMPLEMENTATION
+#include "nuklear.h"
+
+#define SOKOL_IMPL
 #include "sokol_gfx.h"
-#define SOKOL_APP_IMPL
 #include "sokol_app.h"
-#define SOKOL_LOG_IMPL
 #include "sokol_log.h"
-#define SOKOL_GLUE_IMPL
 #include "sokol_glue.h"
+#include "sokol_nuklear.h"
 
 #define DN_MATH_BACKEND_HANDMADE
 #define DN_IMPL
 #include "dn.h"
+
+#include "network.h"
+#include "app.h"
+
+#define SP_NETWORK_IMPL
+#include "network.h"
+#define SP_CLIENT_APP_IMPL
+#include "app.h"
 
 typedef enum {
     SP_POKEMON_TYPE_NONE,
@@ -97,6 +117,7 @@ typedef struct {
     sp_card_t discard [20];
     sp_active_pokemon_t active;
     sp_active_pokemon_t bench [3];
+    u32 time_remaining;
 } sp_player_t;
 
 typedef struct {
@@ -173,48 +194,12 @@ sp_card_t cards [] = {
     }
 };
 
-typedef struct {
-    sg_pass_action pass_action;
-} sp_app_t;
-sp_app_t sp_app;
-
-void sp_init(void) {
-    sg_setup(&(sg_desc){
-        .environment = sglue_environment(),
-        .logger.func = slog_func,
-    });
-    sp_app.pass_action = (sg_pass_action) {
-        .colors[0] = {
-            .load_action = SG_LOADACTION_CLEAR,
-            .clear_value = { 1.0f, 0.0f, 0.0f, 1.0f }
-        }
-    };
-}
-
-void sp_update(void) {
-    float g = sp_app.pass_action.colors[0].clear_value.g + 0.01f;
-    sp_app.pass_action.colors[0].clear_value.g = (g > 1.0f) ? 0.0f : g;
-
-    sg_begin_pass(&(sg_pass){ 
-        .action = sp_app.pass_action, 
-        .swapchain = sglue_swapchain() 
-    });
-    sg_end_pass();
-    sg_commit();
-}
-
-void sp_shutdown(void) {
-    sg_shutdown();
-}
-
 sapp_desc sokol_main(int num_args, char** args) {
-    dn_allocators_init();
-    dn_allocator_t* bump = dn_allocator_find("bump");
-
     return (sapp_desc){
-        .init_cb = sp_init,
-        .frame_cb = sp_update,
-        .cleanup_cb = sp_shutdown,
+        .init_cb = sp_client_init,
+        .frame_cb = sp_client_update,
+        .cleanup_cb = sp_client_shutdown,
+        .event_cb = sp_client_event,
         .width = 400,
         .height = 300,
         .window_title = "spum",

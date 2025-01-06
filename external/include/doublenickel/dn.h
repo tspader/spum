@@ -353,6 +353,10 @@ DN_API void dn_dynamic_array_grow(dn_dynamic_array_t* dynamic_array, u32 capacit
 //  ╚═╝╚═╝     ╚═╝╚═╝     ╚══════╝╚══════╝╚═╝     ╚═╝╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚═╝  ╚═╝   ╚═╝   ╚═╝ ╚═════╝ ╚═╝  ╚═══╝
 #ifdef DN_IMPL
 
+void dn_init() {
+  dn_allocators_init();
+}
+
 size_t hash_siphash_bytes(const void *p, size_t len, size_t seed) {
   unsigned char *d = (unsigned char *) p;
   size_t i,j;

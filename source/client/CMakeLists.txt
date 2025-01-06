@@ -2,18 +2,33 @@ cmake_minimum_required(VERSION 3.21)
 set(CMAKE_C_STANDARD 11)
 project(spumc LANGUAGES C)
 
-include_directories(
-    ../../external/include/sokol
-    ../../external/include/doublenickel
-    ../../external/include/gunslinger
-    ../../external/include/handmade
-    ../../external/include/
+add_executable(spumc)
+
+set(SP_SOURCE_DIR ../../source)
+set(SP_INCLUDE_DIR ../../external/include)
+set(SP_LIB_DIR ../../external/lib)
+set(SP_FILE_DIR $<TARGET_FILE_DIR:spumc>)
+set(SP_SOURCES main.c)
+
+target_sources(spumc PRIVATE
+    ${SP_SOURCES}
 )
 
-set(CLIENT_SOURCES
-    main.c
+target_include_directories(spumc PRIVATE
+    ${SP_SOURCE_DIR}
+    ${SP_INCLUDE_DIR}
+    ${SP_INCLUDE_DIR}/sokol
+    ${SP_INCLUDE_DIR}/sokol/util
+    ${SP_INCLUDE_DIR}/doublenickel
+    ${SP_INCLUDE_DIR}/gunslinger
+    ${SP_INCLUDE_DIR}/handmade
+    ${SP_INCLUDE_DIR}/libwebsockets
+    ${SP_INCLUDE_DIR}/Nuklear
 )
-add_executable(spumc ${CLIENT_SOURCES})
+
+target_link_directories(spumc PRIVATE
+    ${SP_LIB_DIR}
+)
 
 target_compile_definitions(spumc PRIVATE SOKOL_GLES3=1)
 
@@ -21,7 +36,7 @@ set(CMAKE_EXECUTABLE_SUFFIX ".wasm")
 
 set_target_properties(spumc PROPERTIES 
   COMPILE_FLAGS "-Os -std=c11"
-  LINK_FLAGS "--shell-file ../../source/client/index.html -s WASM=1 -s MAX_WEBGL_VERSION=2 -s USE_WEBGL2=1 -s ALLOW_MEMORY_GROWTH=1 -Os"
+  LINK_FLAGS "--shell-file ../../source/client/index.html -s WASM=1 -s MAX_WEBGL_VERSION=2 -s USE_WEBGL2=1 -s ALLOW_MEMORY_GROWTH=1 -Os -lwebsocket.js"
 )
 
 set_target_properties(spumc PROPERTIES
