@@ -3,11 +3,11 @@ set(CMAKE_C_STANDARD 11)
 project(spumc LANGUAGES C)
 
 include_directories(
-    ../../external/sokol
-    ../../external/doublenickel
-    ../../external/gunslinger
-    ../../external/handmade
-    ../../external
+    ../../external/include/sokol
+    ../../external/include/doublenickel
+    ../../external/include/gunslinger
+    ../../external/include/handmade
+    ../../external/include/
 )
 
 set(CLIENT_SOURCES

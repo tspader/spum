@@ -2,15 +2,38 @@ cmake_minimum_required(VERSION 3.21)
 set(CMAKE_C_STANDARD 11)
 project(spums LANGUAGES C)
 
-include_directories(
-    ../../external/sokol
-    ../../external/doublenickel
-    ../../external/gunslinger
-    ../../external/handmade
-    ../../external
+add_executable(spums)
+
+set(SP_INCLUDE_DIR ../../external/include)
+set(SP_LIB_DIR ../../external/lib)
+set(SP_FILE_DIR $<TARGET_FILE_DIR:spums>)
+set(SP_LIBS libwebsockets)
+set(SP_LWS_DLL ${SP_LIB_DIR}/libwebsockets.dll)
+set(SP_SOURCES main.c)
+
+target_sources(spums PRIVATE
+    ${SP_SOURCES}
 )
 
-set(SERVER_SOURCES
-    main.c
+target_include_directories(spums PRIVATE
+    ${SP_INCLUDE_DIR}
+    ${SP_INCLUDE_DIR}/sokol
+    ${SP_INCLUDE_DIR}/doublenickel
+    ${SP_INCLUDE_DIR}/gunslinger
+    ${SP_INCLUDE_DIR}/handmade
+    ${SP_INCLUDE_DIR}/libwebsockets
 )
-add_executable(spums ${SERVER_SOURCES})
+
+target_link_directories(spums PRIVATE
+    ${SP_LIB_DIR}
+)
+
+target_link_libraries(spums PRIVATE 
+    ${SP_LIBS}
+)
+
+add_custom_command(TARGET spums POST_BUILD 
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    ${SP_LWS_DLL}
+    $<TARGET_FILE_DIR:spums>
+)

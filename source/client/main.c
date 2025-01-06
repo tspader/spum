@@ -11,7 +11,7 @@
 #include "sokol_glue.h"
 
 #define DN_MATH_BACKEND_HANDMADE
-#define DOUBLENICKEL_IMPL
+#define DN_IMPL
 #include "dn.h"
 
 typedef enum {
