@@ -318,6 +318,8 @@ typedef struct {
   dn_allocator_t* allocator;
 } dn_fixed_array_t;
 
+#define dn_fixed_array(t) dn_fixed_array_t
+
 DN_API void dn_fixed_array_init(dn_fixed_array_t* fixed_array, u32 max_vertices, u32 element_size, dn_allocator_t* allocator);
 DN_API u8*  dn_fixed_array_push(dn_fixed_array_t* fixed_array, void* data, u32 count);
 DN_API u8*  dn_fixed_array_reserve(dn_fixed_array_t* fixed_array, u32 count);
@@ -337,6 +339,8 @@ typedef struct {
   dn_allocator_t* allocator;
 } dn_dynamic_array_t;
 
+#define dn_dynamic_array(t) dn_dynamic_array_t
+
 DN_API void dn_dynamic_array_init(dn_dynamic_array_t* dynamic_array, u32 element_size, dn_allocator_t* allocator);
 DN_API u8*  dn_dynamic_array_push(dn_dynamic_array_t* dynamic_array, void* data, u32 count);
 DN_API u8*  dn_dynamic_array_reserve(dn_dynamic_array_t* dynamic_array, u32 count);
@@ -344,6 +348,83 @@ DN_API void dn_dynamic_array_clear(dn_dynamic_array_t* dynamic_array);
 DN_API u32  dn_dynamic_array_byte_size(dn_dynamic_array_t* dynamic_array);
 DN_API u8*  dn_dynamic_array_at(dn_dynamic_array_t* dynamic_array, u32 index);
 DN_API void dn_dynamic_array_grow(dn_dynamic_array_t* dynamic_array, u32 capacity);
+
+//////////
+// POOL //
+//////////
+typedef struct {
+	u32 index;
+	u32 generation;
+} dn_pool_handle_t;
+
+typedef struct {
+  i32 next_free;
+  u32 generation;
+  bool occupied;
+} dn_pool_slot_t;
+
+typedef struct {
+  u8* data;
+  dn_pool_slot_t* slots;
+  u32 element_size;
+  u32 capacity;
+  i32 free_list;
+} dn_pool_t;
+
+#define dn_pool(t) dn_pool_t
+
+void             dn_pool_init(dn_pool_t* pool, u32 capacity, u32 element_size);
+dn_pool_handle_t dn_pool_insert(dn_pool_t* pool, void* value);
+dn_pool_handle_t dn_pool_reserve(dn_pool_t* pool);
+void             dn_pool_remove(dn_pool_t* pool, dn_pool_handle_t handle);
+bool             dn_pool_contains(dn_pool_t* pool, dn_pool_handle_t handle);
+void             dn_pool_clear(dn_pool_t* pool);
+dn_pool_handle_t dn_pool_invalid_handle();
+bool             dn_pool_is_handle_valid(dn_pool_handle_t handle);
+bool             dn_pool_slot_has_next_free(dn_pool_slot_t* slot);
+bool             dn_pool_slot_is_match(dn_pool_slot_t* slot, dn_pool_handle_t handle);
+
+/////////////////
+// RING BUFFER //
+/////////////////
+typedef struct {
+	u8* data;
+  u32 element_size;
+	u32 head;
+	u32 size;
+	u32 capacity;
+} dn_ring_buffer_t;
+
+#define dn_ring_buffer(t) dn_ring_buffer_t
+
+typedef struct {
+	u32 index;
+	bool reverse;
+	dn_ring_buffer_t* buffer;
+} dn_ring_buffer_iterator_t;
+
+
+void* dn_ring_buffer_at(dn_ring_buffer_t* buffer, u32 index);
+void  dn_ring_buffer_init(dn_ring_buffer_t* buffer, u32 capacity, u32 element_size);
+void* dn_ring_buffer_back(dn_ring_buffer_t* buffer);
+void* dn_ring_buffer_push(dn_ring_buffer_t* buffer, void* data);
+void* dn_ring_buffer_push_zero(dn_ring_buffer_t* buffer);
+void* dn_ring_buffer_push_overwrite(dn_ring_buffer_t* buffer, void* data);
+void* dn_ring_buffer_push_overwrite_zero(dn_ring_buffer_t* buffer);
+void* dn_ring_buffer_pop(dn_ring_buffer_t* buffer);
+u32   dn_ring_buffer_bytes(dn_ring_buffer_t* buffer);
+void  dn_ring_buffer_clear(dn_ring_buffer_t* buffer);
+bool  dn_ring_buffer_is_full(dn_ring_buffer_t* buffer);
+bool  dn_ring_buffer_is_empty(dn_ring_buffer_t* buffer);
+void* dn_ring_buffer_iter_deref(dn_ring_buffer_iterator_t* it);
+void  dn_ring_buffer_iter_next(dn_ring_buffer_iterator_t* it);
+void  dn_ring_buffer_iter_prev(dn_ring_buffer_iterator_t* it);
+bool  dn_ring_buffer_iter_done(dn_ring_buffer_iterator_t* it);
+dn_ring_buffer_iterator_t dn_ring_buffer_iter(dn_ring_buffer_t* buffer);
+dn_ring_buffer_iterator_t dn_ring_buffer_riter(dn_ring_buffer_t* buffer);
+
+#define dn_ring_buffer_for(rb, it)  for (dn_ring_buffer_iterator_t (it) = dn_ring_buffer_iter((&rb));  !dn_ring_buffer_iter_done(&(it)); !dn_ring_buffer_iter_next(&(it)))
+#define dn_ring_buffer_rfor(rb, it) for (dn_ring_buffer_iterator_t (it) = dn_ring_buffer_riter((&rb)); !dn_ring_buffer_iter_done(&(it)); !dn_ring_buffer_iter_prev(&(it)))
 
 //  ██╗███╗   ███╗██████╗ ██╗     ███████╗███╗   ███╗███████╗███╗   ██╗████████╗ █████╗ ████████╗██╗ ██████╗ ███╗   ██╗
 //  ██║████╗ ████║██╔══██╗██║     ██╔════╝████╗ ████║██╔════╝████╗  ██║╚══██╔══╝██╔══██╗╚══██╔══╝██║██╔═══██╗████╗  ██║
@@ -353,8 +434,199 @@ DN_API void dn_dynamic_array_grow(dn_dynamic_array_t* dynamic_array, u32 capacit
 //  ╚═╝╚═╝     ╚═╝╚═╝     ╚══════╝╚══════╝╚═╝     ╚═╝╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚═╝  ╚═╝   ╚═╝   ╚═╝ ╚═════╝ ╚═╝  ╚═══╝
 #ifdef DN_IMPL
 
+
+void* dn_ring_buffer_at(dn_ring_buffer_t* buffer, u32 index) {
+		return buffer->data + ((buffer->head + buffer->element_size * index) % buffer->capacity);
+}
+
+void dn_ring_buffer_init(dn_ring_buffer_t* buffer, u32 capacity, u32 element_size) {
+	buffer->size = 0;
+	buffer->head = 0;
+	buffer->capacity = capacity;
+	buffer->element_size = element_size;
+	buffer->data = dn_allocator_alloc(&dn_allocators.standard.allocator, capacity * element_size);
+}
+
+void* dn_ring_buffer_back(dn_ring_buffer_t* buffer) {
+	DN_ASSERT(buffer->size);
+  return dn_ring_buffer_at(buffer, buffer->size - 1);
+}
+
+void* dn_ring_buffer_push(dn_ring_buffer_t* buffer, void* data) {
+	DN_ASSERT(buffer->size < buffer->capacity);
+
+	u32 index = (buffer->head + buffer->size) % buffer->capacity;
+  dn_os_memory_copy(data, buffer->data + index * buffer->element_size, buffer->element_size);
+	buffer->size += 1; 
+	return dn_ring_buffer_back(buffer);
+}
+
+void* dn_ring_buffer_push_zero(dn_ring_buffer_t* buffer) {
+	DN_ASSERT(buffer->size < buffer->capacity);
+
+	u32 index = (buffer->head + buffer->size) % buffer->capacity;
+  dn_os_zero_memory(buffer->data + index, buffer->element_size);
+	buffer->size += 1;
+	return dn_ring_buffer_back(buffer);
+}
+
+void* dn_ring_buffer_push_overwrite(dn_ring_buffer_t* buffer, void* data) {
+	if (buffer->size == buffer->capacity) dn_ring_buffer_pop(buffer);
+	return dn_ring_buffer_push(buffer, data);
+}
+
+void* dn_ring_buffer_push_overwrite_zero(dn_ring_buffer_t* buffer) {
+	if (buffer->size == buffer->capacity) dn_ring_buffer_pop(buffer);
+	return dn_ring_buffer_push_zero(buffer);
+}
+
+void* dn_ring_buffer_pop(dn_ring_buffer_t* buffer) {
+	DN_ASSERT(buffer->size);
+
+	void* element = buffer->data + buffer->head;
+	buffer->head = (buffer->head + 1) % buffer->capacity;
+	buffer->size--;
+	return element;
+}
+
+u32 dn_ring_buffer_bytes(dn_ring_buffer_t* buffer) {
+	return buffer->capacity * buffer->element_size;
+}
+
+void dn_ring_buffer_clear(dn_ring_buffer_t* buffer) {
+	memset(buffer->data, 0, dn_ring_buffer_bytes(buffer));
+	buffer->size = 0;
+	buffer->head = 0;
+}
+
+bool dn_ring_buffer_is_full(dn_ring_buffer_t* buffer) {
+	return buffer->capacity == buffer->size;
+}
+
+bool dn_ring_buffer_is_empty(dn_ring_buffer_t* buffer) {
+	return buffer->size == 0;
+}
+
+void* dn_ring_buffer_iter_deref(dn_ring_buffer_iterator_t* it) {
+  return dn_ring_buffer_at(it->buffer, it->index);
+}
+
+void dn_ring_buffer_iter_next(dn_ring_buffer_iterator_t* it) {
+  DN_ASSERT(it->index < it->buffer->size);
+  it->index++;
+}	
+	
+void dn_ring_buffer_iter_prev(dn_ring_buffer_iterator_t* it) {
+  DN_ASSERT(it->index < it->buffer->size);
+  it->index--;
+}	
+	
+bool dn_ring_buffer_iter_done(dn_ring_buffer_iterator_t* it) {
+  if (it->reverse) return it->index == -1;
+  return it->index == it->buffer->size;
+}	
+
+dn_ring_buffer_iterator_t dn_ring_buffer_iter(dn_ring_buffer_t* buffer) {
+	dn_ring_buffer_iterator_t iterator;
+	iterator.index = 0;
+	iterator.reverse = false;
+	iterator.buffer = buffer;
+	return iterator;
+}
+
+dn_ring_buffer_iterator_t dn_ring_buffer_riter(dn_ring_buffer_t* buffer) {
+	dn_ring_buffer_iterator_t iterator;
+	iterator.index = buffer->size - 1;
+	iterator.reverse = true;
+	iterator.buffer = buffer;
+	return iterator;
+}
+
 void dn_init() {
   dn_allocators_init();
+}
+
+void dn_pool_init(dn_pool_t* pool, u32 capacity, u32 element_size) {
+	pool->capacity = capacity;
+	pool->free_list = 0;
+	pool->data = (u8*)dn_allocator_alloc(&dn_allocators.standard.allocator, capacity * element_size);
+	pool->slots = (dn_pool_slot_t*)dn_allocator_alloc(&dn_allocators.standard.allocator, capacity * sizeof(dn_pool_slot_t));
+
+  dn_for(i, capacity) {
+		pool->slots[i].next_free = i + 1;
+  }
+	pool->slots[capacity - 1].next_free = -1;
+}
+
+
+dn_pool_handle_t dn_pool_insert(dn_pool_t* pool, void* value) {
+	assert(!pool->slots[pool->free_list].occupied);
+	
+  dn_pool_slot_t* slot = pool->slots + pool->free_list;
+	slot->occupied = true;
+	slot->generation++;
+
+  dn_os_memory_copy(value, pool->data + pool->element_size * pool->free_list, pool->element_size);
+
+	dn_pool_handle_t handle;
+	handle.index = pool->free_list;
+	handle.generation = slot->generation;
+	
+	pool->free_list = slot->next_free;
+	
+	return handle;
+}
+
+void dn_pool_remove(dn_pool_t* pool, dn_pool_handle_t handle) {
+	if (handle.index >= pool->capacity) return;
+	
+  dn_pool_slot_t* slot = pool->slots + pool->free_list;
+  if (!dn_pool_slot_is_match(slot, handle)) return;
+  if (!dn_pool_slot_has_next_free(slot)) return;
+
+	slot->occupied = false;
+	slot->generation++;
+	slot->next_free = pool->free_list;
+	pool->free_list = handle.index;
+}
+
+
+bool dn_pool_contains(dn_pool_t* pool, dn_pool_handle_t handle) {
+	if (handle.index >= pool->capacity) return false;
+
+  dn_pool_slot_t* slot = pool->slots + handle.index;
+  return dn_pool_slot_is_match(slot, handle);
+}
+
+void dn_pool_clear(dn_pool_t* pool) {
+  dn_for(i, pool->capacity) {
+		pool->slots[i].next_free = i + 1;
+		pool->slots[i].occupied = false;
+		pool->slots[i].generation++;
+	}
+
+	pool->slots[pool->capacity - 1].next_free = -1;
+
+	pool->free_list = 0;
+}
+
+dn_pool_handle_t dn_pool_invalid_handle() {
+	return (dn_pool_handle_t){
+		.index = 0,
+		.generation = 0
+	};
+}
+
+bool dn_pool_is_handle_valid(dn_pool_handle_t handle) {
+	return handle.generation > 0;
+}
+
+bool dn_pool_slot_has_next_free(dn_pool_slot_t* slot) {
+  return slot->next_free >= 0;
+}
+
+bool dn_pool_slot_is_match(dn_pool_slot_t* slot, dn_pool_handle_t handle) {
+  return slot->generation == handle.generation;
 }
 
 size_t hash_siphash_bytes(const void *p, size_t len, size_t seed) {

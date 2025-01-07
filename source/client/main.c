@@ -14,6 +14,7 @@
 // #define NK_UINT_DRAW_INDEX
 #define NK_IMPLEMENTATION
 #include "nuklear.h"
+#include "nuklear_demo.h"
 
 #define SOKOL_IMPL
 #include "sokol_gfx.h"
@@ -34,6 +35,10 @@
 #define SP_CLIENT_APP_IMPL
 #include "app.h"
 
+
+///////////////
+// SIMULATOR //
+///////////////
 typedef enum {
     SP_POKEMON_TYPE_NONE,
     SP_POKEMON_TYPE_GRASS,
@@ -94,6 +99,28 @@ typedef struct {
     sp_card_t cards [20];
     sp_pokemon_type_t energy [3];
 } sp_deck_t;
+
+
+//////////
+// DATA //
+//////////
+sp_card_t cards [] = {
+    { 0 },
+    {
+        .id = SP_CARD_BULBASAUR,
+        .kind = SP_CARD_KIND_POKEMON,
+        .pokemon = {
+            .ex = SP_POKEMON_EX_NONE,
+            .type = SP_POKEMON_TYPE_GRASS,
+            .stage = SP_POKEMON_STAGE_BASIC,
+            .moves = {
+                SP_MOVE_BULBASAUR_VINE_WHIP,
+            },
+            .ability = SP_ABILITY_NONE,
+            .hp = 70
+        }
+    }
+};
 
 
 ///////////
@@ -164,6 +191,9 @@ void sp_match_update(sp_match_t* match) {
     }
 }
 
+/////////
+// RNG //
+/////////
 void sp_rng_init();
 sp_rng_flip_t sp_rng_flip();
 
@@ -176,23 +206,6 @@ sp_rng_flip_t sp_rng_flip() {
     return rand() % 2 ? SP_RNG_FLIP_HEADS : SP_RNG_FLIP_TAILS;
 }
 
-sp_card_t cards [] = {
-    { 0 },
-    {
-        .id = SP_CARD_BULBASAUR,
-        .kind = SP_CARD_KIND_POKEMON,
-        .pokemon = {
-            .ex = SP_POKEMON_EX_NONE,
-            .type = SP_POKEMON_TYPE_GRASS,
-            .stage = SP_POKEMON_STAGE_BASIC,
-            .moves = {
-                SP_MOVE_BULBASAUR_VINE_WHIP,
-            },
-            .ability = SP_ABILITY_NONE,
-            .hp = 70
-        }
-    }
-};
 
 sapp_desc sokol_main(int num_args, char** args) {
     return (sapp_desc){

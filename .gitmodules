@@ -1,6 +1,3 @@
-[submodule "external/sokol"]
-	path = external/sokol
-	url = https://github.com/floooh/sokol.git
 [submodule "external/include/Nuklear"]
 	path = external/include/Nuklear
 	url = git@github.com:Immediate-Mode-UI/Nuklear.git

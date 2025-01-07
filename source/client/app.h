@@ -3,11 +3,21 @@
 
 #define sp_ws_t EMSCRIPTEN_WEBSOCKET_T
 
+typedef enum {
+    SP_CLIENT_STATE_INIT,
+    SP_CLIENT_STATE_WS_INIT,
+    SP_CLIENT_STATE_TOKEN_WAIT,
+    SP_CLIENT_STATE_MATCH_WAIT
+} sp_client_state_t;
+
 typedef struct {
+    sp_token_t uuid;
+    sp_client_state_t state;
     sg_pass_action pass_action;
     sp_ws_t websocket;
-} sp_app_t;
-sp_app_t sp_app;
+    dn_string_t match_password;
+} sp_client_t;
+sp_client_t sp_client;
 
 void sp_client_init();
 void sp_client_update();
@@ -16,6 +26,7 @@ bool sp_client_on_websocket_open(int event_type, const EmscriptenWebSocketOpenEv
 bool sp_client_on_websocket_error(int event_type, const EmscriptenWebSocketErrorEvent* event, void* user_data);
 bool sp_client_on_websocket_close(int event_type, const EmscriptenWebSocketCloseEvent* event, void* user_data);
 bool sp_client_on_websocket_message(int event_type, const EmscriptenWebSocketMessageEvent* event, void* user_data);
+void sp_client_submit_request(sp_net_request_t* request);
 void sp_client_match_request(sp_net_match_request_t* request);
 #endif
 
@@ -24,6 +35,8 @@ void sp_client_match_request(sp_net_match_request_t* request);
 #ifdef SP_CLIENT_APP_IMPL
 void sp_client_init() {
     dn_init();
+
+    emscripten_trace_configure("http://127.0.0.1:5000/", "spumc");
 
     sg_setup(&(sg_desc){
         .environment = sglue_environment(),
@@ -36,51 +49,68 @@ void sp_client_init() {
         .logger.func = slog_func,
     });
 
-    sp_app.pass_action = (sg_pass_action) {
+    sp_client.pass_action = (sg_pass_action) {
         .colors[0] = {
             .load_action = SG_LOADACTION_CLEAR,
             .clear_value = { 1.0f, 0.0f, 0.0f, 1.0f }
         }
     };
 
-    sp_app.websocket = emscripten_websocket_new(&(EmscriptenWebSocketCreateAttributes){
+    sp_client.match_password = {
+        .data = (u8*)dn_allocator_alloc(&dn_allocators.bump.allocator, SP_MAX_PASSWORD_LEN),
+        .len = 0
+    };
+
+    sp_client.websocket = emscripten_websocket_new(&(EmscriptenWebSocketCreateAttributes){
         .url = "ws://localhost:8000",
-        .protocols = "example-protocol",
+        .protocols = "sp-protocol",
         .createOnMainThread = EM_TRUE
     });
-    if (sp_app.websocket <= 0) {
-        printf("%s: websocket creation failed; error = %d\n", __func__, sp_app.websocket);
+    if (sp_client.websocket <= 0) {
+        printf("%s: websocket creation failed; error = %d\n", __func__, sp_client.websocket);
         return;
     }
-    emscripten_websocket_set_onopen_callback(sp_app.websocket, NULL, sp_client_on_websocket_open);
-    emscripten_websocket_set_onerror_callback(sp_app.websocket, NULL, sp_client_on_websocket_error);
-    emscripten_websocket_set_onclose_callback(sp_app.websocket, NULL, sp_client_on_websocket_close);
-    emscripten_websocket_set_onmessage_callback(sp_app.websocket, NULL, sp_client_on_websocket_message);
+    emscripten_websocket_set_onopen_callback(sp_client.websocket, NULL, sp_client_on_websocket_open);
+    emscripten_websocket_set_onerror_callback(sp_client.websocket, NULL, sp_client_on_websocket_error);
+    emscripten_websocket_set_onclose_callback(sp_client.websocket, NULL, sp_client_on_websocket_close);
+    emscripten_websocket_set_onmessage_callback(sp_client.websocket, NULL, sp_client_on_websocket_message);
+
+    sp_client.state = SP_CLIENT_STATE_WS_INIT;
 }
 
-enum {EASY, HARD};
-static int op = EASY;
-static float value = 0.6f;
-static int i =  20;
-
 void sp_client_update() {
-    // u16 is_ws_ready = false;
-    // emscripten_websocket_get_ready_state(sp_app.websocket, &is_ws_ready);
-        // u8 buffer [] = { 69, 10, 20, 30, 40, 50 };
-        // emscripten_websocket_send_binary(sp_app.websocket, buffer, dn_arr_len(buffer));
+    switch (sp_client.state) {
+        case SP_CLIENT_STATE_WS_INIT: {
+            u16 is_ws_ready = 0;
+            emscripten_websocket_get_ready_state(sp_client.websocket, &is_ws_ready);
 
+            if (is_ws_ready) {
+                sp_client.state = SP_CLIENT_STATE_TOKEN_WAIT;
 
-    float g = sp_app.pass_action.colors[0].clear_value.g + 0.01f;
-    sp_app.pass_action.colors[0].clear_value.g = (g > 1.0f) ? 0.0f : g;
+                sp_net_request_t request = dn_zero_initialize();
+                request.op = SP_OPCODE_REQUEST_TOKEN
+                sp_client_submit_request(&request);
+            }
+        }
+        case SP_CLIENT_STATE_TOKEN_WAIT: {
 
+        }
+        default: {
+            DN_UNREACHABLE();
+        }
+    }
     struct nk_context* nk = snk_new_frame();
 
-    if (nk_begin(nk, "Show", nk_rect(50, 50, 220, 220), NK_WINDOW_BORDER|NK_WINDOW_MOVABLE|NK_WINDOW_CLOSABLE)) {
-      if (nk_button_label(nk, "button")) {
-          // event handling
-      }
+    if (nk_begin(nk, "Show", nk_rect(50, 50, 220, 220), NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_CLOSABLE)) {
+        nk_layout_row(nk, NK_STATIC, 30, 100, &(float){ 50, 100 });
+        nk_edit_string(nk, NK_EDIT_SIMPLE, match_password.data, &match_password.len, SP_MAX_PASSWORD_LEN, nk_filter_default);
+        if (nk_button_label(nk, "Search")) {
+            
+        }
     }
     nk_end(nk);
+
+    draw_demo_ui(nk);
 
     sg_begin_pass(&(sg_pass){
         .action = {
@@ -105,6 +135,29 @@ void sp_client_shutdown() {
     snk_shutdown();
 }
 
+void sp_client_process_response(sp_net_response_t* response) {
+    switch (response->op) {
+        case SP_OPCODE_ECHO: {
+            emscripten_trace_log_message("spumc", "SP_OPCODE_ECHO");
+        }
+        case SP_OPCODE_REQUEST_TOKEN: {
+            emscripten_trace_log_message("spumc", "SP_OPCODE_REQUEST_TOKEN");
+        }
+        case SP_OPCODE_MATCH_REQUEST: {
+            emscripten_trace_log_message("spumc", "SP_OPCODE_MATCH_REQUEST");
+        }
+        case default: {
+            DN_UNREACHABLE();
+            break;
+        }
+    }
+}
+
+void sp_client_submit_request(sp_net_request_t* request) {
+    dn_os_memory_copy(sp_magic, request->magic, sizeof(sp_net_magic_t));
+    emscripten_websocket_send_binary(sp_client.websocket, request, sizeof(sp_net_request_t));
+}
+
 void sp_client_match_request(sp_net_match_request_t* request) {
   
 }
@@ -125,12 +178,9 @@ bool sp_client_on_websocket_close(int event_type, const EmscriptenWebSocketClose
 }
 
 bool sp_client_on_websocket_message(int event_type, const EmscriptenWebSocketMessageEvent* event, void* user_data) {
-    printf("%s\n", __func__);
-
-    if (event->isText) {
-        printf("message: %s\n", event->data);
-    }
-
+    DN_ASSERT(event->numBytes == sizeof(sp_net_response_t));
+    sp_net_response_t* response = (sp_net_response_t*)event->data;
+    sp_client_process_response(response);
     return true;
 }
 
