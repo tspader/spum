@@ -1,5 +1,10 @@
 #include "stdint.h"
 #include "assert.h"
+#include <time.h>
+#include <stdint.h>
+#include <sys/time.h>
+#include <stdio.h>
+#include <inttypes.h>
 
 //  ████████╗██╗   ██╗██████╗ ███████╗███████╗
 //  ╚══██╔══╝╚██╗ ██╔╝██╔══██╗██╔════╝██╔════╝
@@ -110,6 +115,8 @@ typedef char dn_asset_name_t [DN_ASSET_NAME_LEN];
 #define dn_type_name(t) (#t)
 
 #define dn_enum_flags(t) DEFINE_ENUM_FLAG_OPERATORS(t)
+
+#define DN_FMT_U64 PRIu64
 
 #include "gs.h"
 
@@ -426,6 +433,29 @@ dn_ring_buffer_iterator_t dn_ring_buffer_riter(dn_ring_buffer_t* buffer);
 #define dn_ring_buffer_for(rb, it)  for (dn_ring_buffer_iterator_t (it) = dn_ring_buffer_iter((&rb));  !dn_ring_buffer_iter_done(&(it)); !dn_ring_buffer_iter_next(&(it)))
 #define dn_ring_buffer_rfor(rb, it) for (dn_ring_buffer_iterator_t (it) = dn_ring_buffer_riter((&rb)); !dn_ring_buffer_iter_done(&(it)); !dn_ring_buffer_iter_prev(&(it)))
 
+
+
+typedef enum {
+	DN_LOG_FLAG_CONSOLE = 1,
+	DN_LOG_FLAG_FILE = 2,
+	DN_LOG_FLAG_DEFAULT = 3,
+} dn_log_flags_t;
+
+#define DN_LOGGER_MESSAGE_BUFFER_SIZE 4096
+#define DN_LOGGER_PREAMBLE_BUFFER_SIZE 512
+typedef struct {
+	char message_buffer [DN_LOGGER_MESSAGE_BUFFER_SIZE];
+	char preamble_buffer [DN_LOGGER_PREAMBLE_BUFFER_SIZE];
+} dn_log_t;
+dn_log_t dn_logger;
+
+DN_API void dn_log(const char* fmt, ...);
+DN_API void dn_log_flags(dn_log_flags_t flags, const char* fmt, ...);
+DN_IMP void dn_log_v(dn_log_flags_t flags, const char* fmt, va_list fmt_args);
+DN_IMP void dn_log_zero();
+DN_IMP void dn_log_init();
+
+
 //  ██╗███╗   ███╗██████╗ ██╗     ███████╗███╗   ███╗███████╗███╗   ██╗████████╗ █████╗ ████████╗██╗ ██████╗ ███╗   ██╗
 //  ██║████╗ ████║██╔══██╗██║     ██╔════╝████╗ ████║██╔════╝████╗  ██║╚══██╔══╝██╔══██╗╚══██╔══╝██║██╔═══██╗████╗  ██║
 //  ██║██╔████╔██║██████╔╝██║     █████╗  ██╔████╔██║█████╗  ██╔██╗ ██║   ██║   ███████║   ██║   ██║██║   ██║██╔██╗ ██║
@@ -434,6 +464,65 @@ dn_ring_buffer_iterator_t dn_ring_buffer_riter(dn_ring_buffer_t* buffer);
 //  ╚═╝╚═╝     ╚═╝╚═╝     ╚══════╝╚══════╝╚═╝     ╚═╝╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚═╝  ╚═╝   ╚═╝   ╚═╝ ╚═════╝ ╚═╝  ╚═══╝
 #ifdef DN_IMPL
 
+#ifdef DN_NUKLEAR
+#define NK_RATIO(...) ((float []){ __VA_ARGS__ })
+
+void nk_dn_string(struct nk_context* nk, dn_string_t str, nk_flags flags) {
+  nk_text(nk, (char*)str.data, (i32)str.len, flags);
+}
+
+void nk_edit_dn_string(struct nk_context* nk, nk_flags flags, dn_string_t buffer, u32 max_len, nk_plugin_filter filter) {
+  nk_edit_string(nk, flags, (char*)buffer.data, (i32*)&buffer.len, max_len, filter);
+}
+#endif
+
+void dn_init() {
+  dn_allocators_init();
+  dn_log_init();
+}
+
+void dn_log_init() {
+  dn_os_zero_memory(&dn_logger, sizeof(dn_log_t));
+}
+
+void dn_log(const char* fmt, ...) {
+	va_list fmt_args;
+	va_start(fmt_args, fmt);
+	dn_log_v(DN_LOG_FLAG_DEFAULT, fmt, fmt_args);
+	va_end(fmt_args);
+}
+
+void dn_log_flags(dn_log_flags_t flags, const char* fmt, ...) {
+	va_list fmt_args;
+	va_start(fmt_args, fmt);
+	dn_log_v(flags, fmt, fmt_args);
+	va_end(fmt_args);
+}
+
+void dn_log_v(dn_log_flags_t flags, const char* fmt, va_list fmt_args) {
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  uint64_t ms_since_epoch = (uint64_t)(tv.tv_sec) * 1000 + (tv.tv_usec / 1000);
+  time_t sec_since_epoch = (time_t)(ms_since_epoch / 1000);
+  struct tm* time_info = localtime(&sec_since_epoch);
+
+	snprintf(dn_logger.preamble_buffer, DN_LOGGER_PREAMBLE_BUFFER_SIZE, "[%04d-%02d-%02d %02d:%02d:%02d.%03" DN_FMT_U64 "]",
+			 1900 + time_info->tm_year, 1 + time_info->tm_mon, time_info->tm_mday,
+			 time_info->tm_hour, time_info->tm_min, time_info->tm_sec, ms_since_epoch % 1000);
+	
+	vsnprintf(&dn_logger.message_buffer[0], DN_LOGGER_MESSAGE_BUFFER_SIZE, fmt, fmt_args);
+	
+	if (flags & DN_LOG_FLAG_CONSOLE) { 
+		printf("%s %s\n", dn_logger.preamble_buffer, dn_logger.message_buffer); 
+	}
+
+	dn_log_zero();
+}
+
+void dn_log_zero() {
+	memset(&dn_logger.preamble_buffer[0], 0, DN_LOGGER_PREAMBLE_BUFFER_SIZE);
+	memset(&dn_logger.message_buffer[0], 0, DN_LOGGER_MESSAGE_BUFFER_SIZE);
+}
 
 void* dn_ring_buffer_at(dn_ring_buffer_t* buffer, u32 index) {
 		return buffer->data + ((buffer->head + buffer->element_size * index) % buffer->capacity);
@@ -542,9 +631,6 @@ dn_ring_buffer_iterator_t dn_ring_buffer_riter(dn_ring_buffer_t* buffer) {
 	return iterator;
 }
 
-void dn_init() {
-  dn_allocators_init();
-}
 
 void dn_pool_init(dn_pool_t* pool, u32 capacity, u32 element_size) {
 	pool->capacity = capacity;

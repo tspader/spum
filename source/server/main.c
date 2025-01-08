@@ -119,8 +119,11 @@ int sp_protocol_handler(sp_ws_instance_t* instance, sp_ws_event_t event, void* u
 			break;
     }
 		case LWS_CALLBACK_SERVER_WRITEABLE: {
-      sp_net_response_t* response = (sp_net_response_t*)dn_ring_buffer_pop(&session->response_queue);
-			lws_write(instance, (u8*)response, sizeof(sp_net_response_t), LWS_WRITE_BINARY);
+      if (!dn_ring_buffer_is_empty(&session->response_queue)) {
+        sp_net_response_t* response = (sp_net_response_t*)dn_ring_buffer_pop(&session->response_queue);
+			  lws_write(instance, (u8*)response, sizeof(sp_net_response_t), LWS_WRITE_BINARY);
+      }
+      
 			break;
     }
 		default: {

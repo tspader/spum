@@ -28,6 +28,7 @@ bool sp_client_on_websocket_close(int event_type, const EmscriptenWebSocketClose
 bool sp_client_on_websocket_message(int event_type, const EmscriptenWebSocketMessageEvent* event, void* user_data);
 void sp_client_submit_request(sp_net_request_t* request);
 void sp_client_match_request(sp_net_match_request_t* request);
+dn_string_t sp_client_state_to_string(sp_client_state_t state);
 #endif
 
 
@@ -36,7 +37,7 @@ void sp_client_match_request(sp_net_match_request_t* request);
 void sp_client_init() {
     dn_init();
 
-    emscripten_trace_configure("http://127.0.0.1:5000/", "spumc");
+    dn_log("spumc");
 
     sg_setup(&(sg_desc){
         .environment = sglue_environment(),
@@ -56,7 +57,7 @@ void sp_client_init() {
         }
     };
 
-    sp_client.match_password = {
+    sp_client.match_password = (dn_string_t){
         .data = (u8*)dn_allocator_alloc(&dn_allocators.bump.allocator, SP_MAX_PASSWORD_LEN),
         .len = 0
     };
@@ -88,22 +89,29 @@ void sp_client_update() {
                 sp_client.state = SP_CLIENT_STATE_TOKEN_WAIT;
 
                 sp_net_request_t request = dn_zero_initialize();
-                request.op = SP_OPCODE_REQUEST_TOKEN
+                request.op = SP_OPCODE_REQUEST_TOKEN;
                 sp_client_submit_request(&request);
             }
+            break;
         }
         case SP_CLIENT_STATE_TOKEN_WAIT: {
-
+            break;
         }
         default: {
             DN_UNREACHABLE();
+            break;
         }
     }
     struct nk_context* nk = snk_new_frame();
 
-    if (nk_begin(nk, "Show", nk_rect(50, 50, 220, 220), NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_CLOSABLE)) {
-        nk_layout_row(nk, NK_STATIC, 30, 100, &(float){ 50, 100 });
-        nk_edit_string(nk, NK_EDIT_SIMPLE, match_password.data, &match_password.len, SP_MAX_PASSWORD_LEN, nk_filter_default);
+    dn_string_t client_state = sp_client_state_to_string(sp_client.state);
+    printf("state: %d, size = %d\n", sp_client.state, client_state.len);
+    if (nk_begin(nk, "spum", nk_rect(50, 50, 400, 400), NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_CLOSABLE)) {
+        nk_layout_row_dynamic(nk, 0, NK_TEXT_LEFT);
+        nk_dn_string(nk, sp_client_state_to_string(sp_client.state), NK_TEXT_LEFT);
+
+        nk_layout_row(nk, NK_STATIC, 30, 100, NK_RATIO(200, 100));
+        nk_edit_dn_string(nk, NK_EDIT_SIMPLE, sp_client.match_password, SP_MAX_PASSWORD_LEN, nk_filter_default);
         if (nk_button_label(nk, "Search")) {
             
         }
@@ -138,15 +146,18 @@ void sp_client_shutdown() {
 void sp_client_process_response(sp_net_response_t* response) {
     switch (response->op) {
         case SP_OPCODE_ECHO: {
-            emscripten_trace_log_message("spumc", "SP_OPCODE_ECHO");
+            dn_log("SP_OPCODE_ECHO");
+            break;
         }
         case SP_OPCODE_REQUEST_TOKEN: {
-            emscripten_trace_log_message("spumc", "SP_OPCODE_REQUEST_TOKEN");
+            dn_log("SP_OPCODE_ECHO");
+            break;
         }
         case SP_OPCODE_MATCH_REQUEST: {
-            emscripten_trace_log_message("spumc", "SP_OPCODE_MATCH_REQUEST");
+            dn_log("SP_OPCODE_ECHO");
+            break;
         }
-        case default: {
+        default: {
             DN_UNREACHABLE();
             break;
         }
@@ -160,6 +171,16 @@ void sp_client_submit_request(sp_net_request_t* request) {
 
 void sp_client_match_request(sp_net_match_request_t* request) {
   
+}
+
+dn_string_t sp_client_state_to_string(sp_client_state_t state) {
+    switch (state) {
+        case SP_CLIENT_STATE_INIT:       return dn_string_literal("SP_CLIENT_STATE_INIT");
+        case SP_CLIENT_STATE_WS_INIT:    return dn_string_literal("SP_CLIENT_WS_INIT");
+        case SP_CLIENT_STATE_TOKEN_WAIT: return dn_string_literal("SP_CLIENT_TOKEN_WAIT");
+        case SP_CLIENT_STATE_MATCH_WAIT: return dn_string_literal("SP_CLIENT_MATCH_WAIT");
+        default:                         return dn_string_literal("SP_CLIENT_UNKNOWN");
+    }
 }
 
 bool sp_client_on_websocket_open(int event_type, const EmscriptenWebSocketOpenEvent* event, void* user_data) {

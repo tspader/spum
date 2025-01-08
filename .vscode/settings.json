@@ -1,0 +1,30 @@
+{
+  "files.associations": {
+    "*.vertex": "glsl",
+    "*.fragment": "glsl",
+    "*.glsl": "glsl",
+    "dn.h": "c",
+    "sokol_app.h": "c",
+    "khrplatform.h": "c",
+    "handmademath.h": "c",
+    "sokol_glue.h": "c",
+    "sokol_nuklear.h": "c",
+    "nuklear.h": "c",
+    "stdio.h": "c",
+    "chrono": "c",
+    "system_error": "c",
+    "xlocale": "c",
+    "lws.h": "c",
+    "vector": "c",
+    "xhash": "c",
+    "xstring": "c",
+    "format": "c",
+    "initializer_list": "c",
+    "list": "c",
+    "random": "c",
+    "utility": "c",
+    "xtree": "c",
+    "xutility": "c",
+    "network.h": "c"
+  }
+}

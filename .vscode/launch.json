@@ -1,0 +1,33 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "spums",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/server/spums",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "miDebuggerPath": "/usr/bin/gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "preLaunchTask": "build spums"
+    },
+    {
+      "name": "spumc",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:3000/build/client/spumc/index.html",
+      "preLaunchTask": "spum web server",
+  } 
+  ]
+}

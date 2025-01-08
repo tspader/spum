@@ -1,5 +1,6 @@
 #include "emscripten/emscripten.h"
 #include "emscripten/websocket.h"
+#include "emscripten/trace.h"
 
 #define NK_INCLUDE_FIXED_TYPES
 #define NK_INCLUDE_STANDARD_IO
@@ -24,6 +25,7 @@
 #include "sokol_nuklear.h"
 
 #define DN_MATH_BACKEND_HANDMADE
+#define DN_NUKLEAR
 #define DN_IMPL
 #include "dn.h"
 
