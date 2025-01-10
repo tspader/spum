@@ -58,7 +58,7 @@ typedef struct {
 } dn_vector2i_t;
 
 
-typedef size_t dn_hash_t;
+typedef u64 dn_hash_t;
 
 #define DN_ASSET_NAME_LEN 64
 typedef char dn_asset_name_t [DN_ASSET_NAME_LEN];
@@ -205,6 +205,7 @@ typedef struct {
 } dn_string_builder_t;
 
 #define dn_string_literal(s) (dn_string_t){ .data = (u8*)(s), .len = sizeof(s) - 1}
+#define dn_tstring_builder() (dn_string_builder_t){ .buffer = dn_zero_initialize(), .allocator = &dn_allocators.bump.allocator }
 
 DN_API void        dn_string_builder_grow(dn_string_builder_t* builder, u32 requested_capacity);
 DN_API void        dn_string_builder_append(dn_string_builder_t* builder, dn_string_t str);
@@ -306,6 +307,7 @@ void      dn_hash_encode_hex(char* destination, const char* data, size_t len);
 void      dn_hash_encode_base64(char* destination, const char* source, size_t len);
 
 #define dn_hash_type(t) dn_hash_string_dumb((const char*)(#t))
+
 
 //   ██████╗ ██████╗ ███╗   ██╗████████╗ █████╗ ██╗███╗   ██╗███████╗██████╗ ███████╗
 //  ██╔════╝██╔═══██╗████╗  ██║╚══██╔══╝██╔══██╗██║████╗  ██║██╔════╝██╔══██╗██╔════╝
@@ -410,7 +412,6 @@ typedef struct {
 	dn_ring_buffer_t* buffer;
 } dn_ring_buffer_iterator_t;
 
-
 void* dn_ring_buffer_at(dn_ring_buffer_t* buffer, u32 index);
 void  dn_ring_buffer_init(dn_ring_buffer_t* buffer, u32 capacity, u32 element_size);
 void* dn_ring_buffer_back(dn_ring_buffer_t* buffer);
@@ -434,7 +435,12 @@ dn_ring_buffer_iterator_t dn_ring_buffer_riter(dn_ring_buffer_t* buffer);
 #define dn_ring_buffer_rfor(rb, it) for (dn_ring_buffer_iterator_t (it) = dn_ring_buffer_riter((&rb)); !dn_ring_buffer_iter_done(&(it)); !dn_ring_buffer_iter_prev(&(it)))
 
 
-
+//  ██╗      ██████╗  ██████╗ 
+//  ██║     ██╔═══██╗██╔════╝ 
+//  ██║     ██║   ██║██║  ███╗
+//  ██║     ██║   ██║██║   ██║
+//  ███████╗╚██████╔╝╚██████╔╝
+//  ╚══════╝ ╚═════╝  ╚═════╝ 
 typedef enum {
 	DN_LOG_FLAG_CONSOLE = 1,
 	DN_LOG_FLAG_FILE = 2,
@@ -454,6 +460,24 @@ DN_API void dn_log_flags(dn_log_flags_t flags, const char* fmt, ...);
 DN_IMP void dn_log_v(dn_log_flags_t flags, const char* fmt, va_list fmt_args);
 DN_IMP void dn_log_zero();
 DN_IMP void dn_log_init();
+#define DN_LOG(fmt, ...) dn_log("%s: " fmt, __func__, __VA_ARGS__)
+
+
+//  ███╗   ██╗██╗   ██╗██╗  ██╗██╗     ███████╗ █████╗ ██████╗ 
+//  ████╗  ██║██║   ██║██║ ██╔╝██║     ██╔════╝██╔══██╗██╔══██╗
+//  ██╔██╗ ██║██║   ██║█████╔╝ ██║     █████╗  ███████║██████╔╝
+//  ██║╚██╗██║██║   ██║██╔═██╗ ██║     ██╔══╝  ██╔══██║██╔══██╗
+//  ██║ ╚████║╚██████╔╝██║  ██╗███████╗███████╗██║  ██║██║  ██║
+//  ╚═╝  ╚═══╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝
+#ifdef DN_NUKLEAR
+typedef struct nk_context nk_context;
+
+#define NK_RATIO(...) ((float []){ __VA_ARGS__ })
+
+void nk_dn_string(struct nk_context* nk, dn_string_t str, nk_flags flags);
+void nk_edit_dn_string(struct nk_context* nk, nk_flags flags, dn_string_t* buffer, u32 max_len, nk_plugin_filter filter);
+#endif
+
 
 
 //  ██╗███╗   ███╗██████╗ ██╗     ███████╗███╗   ███╗███████╗███╗   ██╗████████╗ █████╗ ████████╗██╗ ██████╗ ███╗   ██╗
@@ -464,22 +488,25 @@ DN_IMP void dn_log_init();
 //  ╚═╝╚═╝     ╚═╝╚═╝     ╚══════╝╚══════╝╚═╝     ╚═╝╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚═╝  ╚═╝   ╚═╝   ╚═╝ ╚═════╝ ╚═╝  ╚═══╝
 #ifdef DN_IMPL
 
-#ifdef DN_NUKLEAR
-#define NK_RATIO(...) ((float []){ __VA_ARGS__ })
-
-void nk_dn_string(struct nk_context* nk, dn_string_t str, nk_flags flags) {
-  nk_text(nk, (char*)str.data, (i32)str.len, flags);
-}
-
-void nk_edit_dn_string(struct nk_context* nk, nk_flags flags, dn_string_t buffer, u32 max_len, nk_plugin_filter filter) {
-  nk_edit_string(nk, flags, (char*)buffer.data, (i32*)&buffer.len, max_len, filter);
-}
-#endif
-
 void dn_init() {
   dn_allocators_init();
   dn_log_init();
 }
+
+void dn_update() {
+  dn_allocators_update();
+}
+
+#ifdef DN_NUKLEAR
+void nk_dn_string(struct nk_context* nk, dn_string_t str, nk_flags flags) {
+  nk_text(nk, (char*)str.data, (i32)str.len, flags);
+}
+
+void nk_edit_dn_string(struct nk_context* nk, nk_flags flags, dn_string_t* buffer, u32 max_len, nk_plugin_filter filter) {
+  nk_edit_string(nk, flags, (char*)buffer->data, (i32*)&buffer->len, max_len, filter);
+}
+#endif
+
 
 void dn_log_init() {
   dn_os_zero_memory(&dn_logger, sizeof(dn_log_t));
@@ -715,7 +742,7 @@ bool dn_pool_slot_is_match(dn_pool_slot_t* slot, dn_pool_handle_t handle) {
   return slot->generation == handle.generation;
 }
 
-size_t hash_siphash_bytes(const void *p, size_t len, size_t seed) {
+dn_hash_t hash_siphash_bytes(const void *p, size_t len, size_t seed) {
   unsigned char *d = (unsigned char *) p;
   size_t i,j;
   size_t v0,v1,v2,v3, data;
@@ -727,14 +754,6 @@ size_t hash_siphash_bytes(const void *p, size_t len, size_t seed) {
   v1 = ((((size_t) 0x646f7261 << 16) << 16) + 0x6e646f6d) ^ ~seed;
   v2 = ((((size_t) 0x6c796765 << 16) << 16) + 0x6e657261) ^  seed;
   v3 = ((((size_t) 0x74656462 << 16) << 16) + 0x79746573) ^ ~seed;
-
-  #ifdef STBDS_TEST_SIPHASH_2_4
-  // hardcoded with key material in the siphash test vectors
-  v0 ^= 0x0706050403020100ull ^  seed;
-  v1 ^= 0x0f0e0d0c0b0a0908ull ^ ~seed;
-  v2 ^= 0x0706050403020100ull ^  seed;
-  v3 ^= 0x0f0e0d0c0b0a0908ull ^ ~seed;
-  #endif
 
   #define gs_sipround() \
     do {                   \
@@ -1184,24 +1203,36 @@ void dn_bump_allocator_clear(dn_bump_allocator_t* allocator) {
 
 void* dn_bump_allocator_on_alloc(dn_allocator_t* allocator, dn_allocator_mode_t mode, u32 size, void* old_memory) {
 	dn_bump_allocator_t* bump = (dn_bump_allocator_t*)allocator;
-	if (mode == DN_ALLOCATOR_MODE_ALLOC) {
-		DN_ASSERT(bump->bytes_used + size <= bump->capacity);
+  switch (mode) {
+    case DN_ALLOCATOR_MODE_ALLOC: {
+      DN_ASSERT(bump->bytes_used + size <= bump->capacity);
 
-		u8* memory_block = bump->buffer + bump->bytes_used;
-    gs_hash_table_insert(bump->allocations, bump->bytes_used, size);
-		bump->bytes_used += size;
-	
-		return memory_block;
-	}
-	else if (mode == DN_ALLOCATOR_MODE_FREE) {
-		return NULL;
-	}
-	else if (mode == DN_ALLOCATOR_MODE_RESIZE) {
-    DN_BROKEN();
-	}
+      u8* memory_block = bump->buffer + bump->bytes_used;
+      gs_hash_table_insert(bump->allocations, bump->bytes_used, size);
+      bump->bytes_used += size;
+    
+      return memory_block;
+    }
+    case DN_ALLOCATOR_MODE_FREE: {
+ 		  return NULL;
+    }
+    case DN_ALLOCATOR_MODE_RESIZE: {
+      if (!old_memory) {
+        return allocator->on_alloc(allocator, DN_ALLOCATOR_MODE_ALLOC, size, NULL);
+      }
 
-	DN_UNREACHABLE();
-	return NULL;
+      u32 offset = (u32)((u8*)old_memory - (u8*)bump->buffer);
+      u32 old_size = gs_hash_table_get(bump->allocations, offset);
+      if (old_size >= size) {
+        return old_memory;
+      } 
+
+      void* memory_block = allocator->on_alloc(allocator, DN_ALLOCATOR_MODE_ALLOC, size, NULL);
+      dn_os_memory_copy(old_memory, memory_block, size);
+      return memory_block;
+
+    }
+  }
 }
 
 ////////////////////////

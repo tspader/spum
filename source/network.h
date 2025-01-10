@@ -27,7 +27,8 @@ typedef enum {
 typedef u8 sp_net_match_password_t [SP_MAX_PASSWORD_LEN];
 
 typedef struct {
-  sp_net_match_password_t password;
+  dn_hash_t password;
+  sp_deck_t deck;
 } sp_net_match_request_t;
 
 typedef struct {
@@ -35,18 +36,14 @@ typedef struct {
 } sp_net_echo_request_t;
 
 
-/////////////
-// REQUEST //
-/////////////
-typedef union {
-  sp_net_echo_request_t echo;
-  sp_net_match_request_t match;
-} sp_net_request_payload_t;
-
 typedef struct {
   sp_net_magic_t magic;
+  sp_token_t token;
   sp_net_opcode_t op;
-  sp_net_request_payload_t payload;
+  union {
+    sp_net_echo_request_t echo;
+    sp_net_match_request_t match;
+  };
 } sp_net_request_t;
 
 
@@ -57,14 +54,19 @@ typedef struct {
   u32 success;
 } sp_net_echo_response_t;
 
-typedef union {
-  sp_net_echo_response_t echo;
-} sp_net_response_payload_t;
+typedef struct {
+  sp_token_t token;
+} sp_net_request_token_response_t;
+
 
 typedef struct {
   sp_net_magic_t magic;
   sp_net_opcode_t op;
-  sp_net_response_payload_t payload;
+
+  union {
+    sp_net_echo_response_t echo;
+    sp_net_request_token_response_t request_token;
+  };
 } sp_net_response_t;
 
 #endif

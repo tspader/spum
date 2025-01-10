@@ -8,12 +8,28 @@
       "options": {
         "cwd": "${workspaceFolder}/build"
       },
-      "args": [],
+      "problemMatcher": []
+    },
+    {
+      "type": "shell",
+      "label": "build spumc",
+      "command": "${workspaceFolder}/build/build-client.sh",
+      "options": {
+        "cwd": "${workspaceFolder}/build",
+        "shell": {
+          "executable": "sh.exe"
+        }
+      },
+      "problemMatcher": []
     },
     {
       "label": "spum web server",
       "type": "process",
-      "command": "${input:spumPreview}"
+      "command": "${input:spumPreview}",
+      "dependsOn": [
+        "build spumc"
+      ],
+      "problemMatcher": []
     }
   ],
   "inputs": [

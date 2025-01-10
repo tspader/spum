@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 set(CMAKE_C_STANDARD 11)
+set(CMAKE_EXECUTABLE_SUFFIX ".wasm")
 
 project(spumc LANGUAGES C)
 
@@ -25,13 +26,21 @@ target_include_directories(spumc PRIVATE
     ${SP_INCLUDE_DIR}/Nuklear
 )
 
+
 target_compile_definitions(spumc PRIVATE SOKOL_GLES3=1)
 
-set(CMAKE_EXECUTABLE_SUFFIX ".wasm")
+target_compile_options(spumc PRIVATE
+    "-std=c11"
+    "-O0"
+)
 
-set_target_properties(spumc PROPERTIES 
-  COMPILE_FLAGS "-Os -std=c11"
-  LINK_FLAGS "--shell-file ../../source/client/index.html -s WASM=1 -s MAX_WEBGL_VERSION=2 -s USE_WEBGL2=1 -s ALLOW_MEMORY_GROWTH=1 -Os -lwebsocket.js"
+target_link_options(spumc PRIVATE
+    "-sWASM=1"
+    "-sUSE_WEBGL2=1"
+    "-sMAX_WEBGL_VERSION=2"
+    "-sALLOW_MEMORY_GROWTH=1"
+    "--shell-file=../../source/client/index.html"
+    "-lwebsocket.js"
 )
 
 set_target_properties(spumc PROPERTIES
