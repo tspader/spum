@@ -9,13 +9,26 @@ typedef enum {
     SP_CLIENT_STATE_TOKEN_WAIT,
     SP_CLIENT_STATE_IDLE,
     SP_CLIENT_STATE_MATCH_WAIT,
+    SP_CLIENT_STATE_MATCH,
 } sp_client_state_t;
 
 typedef struct {
+    sp_deck_t deck;
     dn_string_t password;
     bool search_requested;
     bool cancel_requested;
+    bool ready;
 } sp_client_match_search_t;
+
+typedef struct {
+    sp_deck_t deck;
+    dn_string_t username;
+    sp_card_id_t hand [SP_HAND_SIZE];
+    sp_card_id_t discard [SP_DECK_SIZE];
+    sp_pokemon_type_t energy [2];
+    sp_pokemon_type_t opponent_energy [2];
+    sp_turn_order_t turn;
+} sp_client_match_state_t;
 
 typedef struct {
     sg_pass_action pass_action;
@@ -25,6 +38,8 @@ typedef struct {
 
     sp_client_state_t state;
     sp_client_match_search_t match_search;
+    sp_client_match_state_t match;
+    dn_string_t username;
 
     sp_deck_t deck;
 
@@ -36,10 +51,13 @@ void        sp_client_init();
 void        sp_client_update();
 void        sp_client_render();
 void        sp_client_shutdown();
+void        sp_client_generate_username();
 bool        sp_client_on_websocket_open(int event_type, const EmscriptenWebSocketOpenEvent* event, void* user_data);
 bool        sp_client_on_websocket_error(int event_type, const EmscriptenWebSocketErrorEvent* event, void* user_data);
 bool        sp_client_on_websocket_close(int event_type, const EmscriptenWebSocketCloseEvent* event, void* user_data);
 bool        sp_client_on_websocket_message(int event_type, const EmscriptenWebSocketMessageEvent* event, void* user_data);
+void        sp_client_process_response(sp_net_response_t* response);
+void        sp_client_process_match_event(sp_net_match_event_t* event);
 void        sp_client_submit_request(sp_net_request_t* request);
 dn_string_t sp_client_state_to_string(sp_client_state_t state);
 #endif
@@ -49,8 +67,9 @@ dn_string_t sp_client_state_to_string(sp_client_state_t state);
 #ifdef SP_CLIENT_APP_IMPL
 void sp_client_init() {
     dn_init();
-
     dn_log("spumc");
+
+    sp_rng_init();
 
     // Set up Sokol and Nuklear
     sg_setup(&(sg_desc){
@@ -89,18 +108,13 @@ void sp_client_init() {
     sp_client.state = SP_CLIENT_STATE_WS_INIT;
 
     // Data
-    sp_client.match_search.password = (dn_string_t){
-        .data = (u8*)dn_allocator_alloc(&dn_allocators.standard.allocator, SP_MAX_PASSWORD_LEN),
-        .len = 0
-    };
+    sp_client.match_search.password = dn_string_alloc(SP_MAX_PASSWORD_LEN, &dn_allocators.standard.allocator);
 
-    sp_client.deck = (sp_deck_t){
-        .cards = dn_zero_initialize(),
-        .energy = { SP_POKEMON_TYPE_GRASS, SP_POKEMON_TYPE_NONE, SP_POKEMON_TYPE_NONE }
-    };
-    dn_for(i, 20) {
-        sp_client.deck.cards[i] = sp_rng_pick_from_set((u32 []) { SP_CARD_BULBASAUR, SP_CARD_WEEDLE, SP_CARD_ODDISH }, 3);
-    }
+    // @string Generate a fixed size string buffer which is editable
+    sp_client.username = dn_string_alloc(SP_MAX_USERNAME_LEN, &dn_allocators.standard.allocator);
+    sp_client_generate_username();
+
+    sp_client.deck = sp_deck_gen_random();
 }
 
 void sp_client_update() {
@@ -109,10 +123,13 @@ void sp_client_update() {
     sp_client.nk = snk_new_frame();
     nk_context* nk = sp_client.nk;
 
-    nk_begin(nk, "spum", nk_rect(10, 10, 400, 400), NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_CLOSABLE);
+    nk_begin(nk, "spum", nk_rect(10, 10, 400, 800), NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_CLOSABLE);
 
     if (nk_tree_push(nk, NK_TREE_TAB, "Client Information", NK_MINIMIZED)) {
         nk_layout_row_dynamic(nk, 0, 2);
+
+        nk_dn_string(nk, dn_string_literal("Username: "), NK_TEXT_LEFT);
+        nk_edit_dn_string(nk, NK_EDIT_SIMPLE, &sp_client.username, SP_MAX_USERNAME_LEN, nk_filter_default);
 
         dn_string_builder_t builder = dn_tstring_builder();
         dn_string_builder_append_fmt(&builder, dn_string_literal("%llu"), sp_client.token);
@@ -126,31 +143,28 @@ void sp_client_update() {
     }    
 
     if (nk_tree_push(nk, NK_TREE_TAB, "Decks", NK_MINIMIZED)) {
-        nk_layout_row_dynamic(nk, 0, 4);
+        nk_layout_row_static(nk, 18, 100, 4);
+        nk_dn_string(nk, dn_string_literal("#"), NK_TEXT_LEFT);
+        nk_dn_string(nk, dn_string_literal("Card"), NK_TEXT_LEFT);
+        nk_dn_string(nk, dn_string_literal("Set"), NK_TEXT_LEFT);
+        nk_dn_string(nk, dn_string_literal("Set Number"), NK_TEXT_LEFT);
 
-        gs_hash_table(sp_card_id_t, bool) 
-        dn_for(i, 20) {
-            sp_card_t card = sp_client.deck.cards[i];
-            nk_labelf()
-            card.
+        sp_deck_count_t count = sp_deck_count(&sp_client.deck);
+
+        gs_hash_table_for(count.cards, it) {
+            sp_card_id_t card_id = gs_hash_table_iter_getk(count.cards, it);
+            u32 num_instances = gs_hash_table_iter_get(count.cards, it);
+            sp_card_t card = sp_cards[card_id];
+
+            nk_labelf(nk, NK_TEXT_LEFT, "(%d)", num_instances);
+            nk_dn_string(nk, card.pokemon.name, NK_TEXT_LEFT);
+            nk_dn_string(nk, sp_card_set_to_short_string(card.set), NK_TEXT_LEFT);
+            nk_labelf(nk, NK_TEXT_LEFT, "%d", card.set_id);
         }
-        nk_labelf()
+
+        nk_tree_pop(nk);
     }
 
-2 Ralts A1 130
-2 Kirlia A1 131
-2 Gardevoir A1 132
-2 Mewtwo ex A1 129
-1 Jynx A1 127
-
-2 Professor's Research P-A 7
-1 Giovanni A1 223
-1 Sabrina A1 225
-1 Leaf A1a 68
-2 Poké Ball P-A 5
-2 Mythical Slab A1a 65
-1 X Speed P-A 2
-1 Red Card P-A 6
     if (nk_tree_push(nk, NK_TREE_TAB, "Find a Match", NK_MINIMIZED)) {
         nk_layout_row(nk, NK_STATIC, 30, 3, NK_RATIO(150, 100, 100));
 
@@ -158,6 +172,7 @@ void sp_client_update() {
 
         if (nk_button_label(nk, "Search")) {
             sp_client.match_search.search_requested = true;
+            sp_client.match_search.deck = sp_client.deck;
         }
 
         if (nk_button_label(nk, "Cancel")) {
@@ -173,10 +188,9 @@ void sp_client_update() {
             nk_label(nk, dn_string_builder_write_cstr(&builder), NK_TEXT_LEFT);
         }
 
-
-
         nk_tree_pop(nk);
     }
+    nk_end(nk);
 
     switch (sp_client.state) {
         case SP_CLIENT_STATE_WS_INIT: {
@@ -187,13 +201,21 @@ void sp_client_update() {
                 DN_LOG("SP_CLIENT_STATE_WS_INIT");
                 sp_client.state = SP_CLIENT_STATE_TOKEN_WAIT;
 
+                // @string Copy your username into an over-the-wire buffer
                 sp_net_request_t request = dn_zero_initialize();
                 request.op = SP_OPCODE_REQUEST_TOKEN;
+
+                sp_username_t* username = &request.token_req.username;
+                dn_string_copy_to_str_buffer(sp_client.username, username);
+
                 sp_client_submit_request(&request);
             }
             break;
         }
         case SP_CLIENT_STATE_TOKEN_WAIT: {
+            if (sp_client.token) {
+                sp_client.state = SP_CLIENT_STATE_IDLE;
+            }
             break;
         }
         case SP_CLIENT_STATE_IDLE: {
@@ -202,28 +224,105 @@ void sp_client_update() {
 
                 sp_net_request_t request;
                 request.op = SP_OPCODE_MATCH_REQUEST;
-                request.match.password = dn_hash_string(sp_client.match_search.password);
-                request.match.deck = sp_client.deck;
+                request.match = (sp_net_match_request_t){
+                    .password = dn_hash_string(sp_client.match_search.password),
+                    .deck = sp_client.deck,
+                };
                 sp_client_submit_request(&request);
-
-                DN_LOG("sizeof(size_t) == %d, %zu", sizeof(size_t), request.match.password);
 
                 sp_client.state = SP_CLIENT_STATE_MATCH_WAIT;
             }
             break;
         }
         case SP_CLIENT_STATE_MATCH_WAIT: {
-            
+            if (sp_client.match_search.ready) {
+                sp_client.match.deck = sp_client.match_search.deck;
+                sp_client.state = SP_CLIENT_STATE_MATCH;
+            }
             break;
         }
+        case SP_CLIENT_STATE_MATCH: {
+            dn_string_builder_t builder = dn_tstring_builder();
+            dn_string_builder_append(&builder, sp_client.username);
+            dn_string_builder_append(&builder, dn_string_literal(" vs. "));
+            dn_string_builder_append(&builder, sp_client.match.username);
+            
+            nk_begin(nk, dn_string_builder_write_cstr(&builder), nk_rect(420, 10, 800, 800), NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_TITLE);
+            nk_layout_row_dynamic(nk, 0, 2);
 
+            if (nk_group_begin(nk, dn_string_to_cstr(sp_client.username), NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_BORDER)) {
+                sp_deck_count_t count = sp_deck_count(&sp_client.deck);
+
+                if (nk_tree_push(nk, NK_TREE_TAB, "Hand", NK_MINIMIZED)) {
+                    nk_layout_row_static(nk, 12, 100, 1);
+                    sp_for_card(it, sp_client.match.hand) {
+                        sp_card_id_t id = sp_card_iter_get(&it);
+                        sp_card_t* card = &sp_cards[id];
+                        nk_dn_string_colored(nk, card->pokemon.name, NK_TEXT_LEFT, dn_colors.zomp);
+                    }
+
+                    nk_tree_pop(nk);
+                }
+                sp_deck_count_remove_cards(&count, sp_client.match.hand, SP_HAND_SIZE);
+                
+
+                if (nk_tree_push(nk, NK_TREE_TAB, "Discard", NK_MINIMIZED)) {
+                    nk_layout_row_static(nk, 12, 100, 1);
+                    sp_for_card(it, sp_client.match.discard) {
+                        sp_card_id_t id = sp_card_iter_get(&it);
+                        sp_card_t* card = &sp_cards[id];
+                        nk_dn_string_colored(nk, card->pokemon.name, NK_TEXT_LEFT, dn_colors.indian_red);
+                    }
+
+                    nk_tree_pop(nk);
+                }
+                sp_deck_count_remove_cards(&count, sp_client.match.discard, SP_DECK_SIZE);
+
+                if (nk_tree_push(nk, NK_TREE_TAB, "Deck", NK_MINIMIZED)) {
+                    nk_layout_row_static(nk, 12, 100, 1);
+                    gs_hash_table_for(count.cards, it) {
+                        sp_card_id_t card_id = gs_hash_table_iter_getk(count.cards, it);
+                        u32 num_instances = gs_hash_table_iter_get(count.cards, it);
+                        sp_card_t* card = &sp_cards[card_id];
+
+                        dn_for(i, num_instances) {
+                            nk_dn_string_colored(nk, card->pokemon.name, NK_TEXT_LEFT, dn_colors.selective_yellow);
+                        }
+                    }
+
+                    nk_tree_pop(nk);
+                }
+
+                nk_group_end(nk);
+            }
+            
+            if (nk_group_begin(nk, dn_string_to_cstr(sp_client.match.username), NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_BORDER)) {
+                sp_deck_count_t count = sp_deck_count(&sp_client.deck);
+
+                if (nk_tree_push(nk, NK_TREE_TAB, "Hand", NK_MINIMIZED)) {
+                    nk_layout_row_static(nk, 12, 100, 1);
+                    sp_for_card(it, sp_client.match.hand) {
+                        sp_card_id_t id = sp_card_iter_get(&it);
+                        sp_card_t* card = &sp_cards[id];
+                        nk_dn_string_colored(nk, card->pokemon.name, NK_TEXT_LEFT, dn_colors.zomp);
+                    }
+
+                    nk_tree_pop(nk);
+                }
+
+                sp_deck_count_remove_cards(&count, sp_client.match.hand, SP_HAND_SIZE);
+                nk_group_end(nk);
+            }
+            nk_end(nk);
+
+            break;
+        }
         default: {
             DN_UNREACHABLE();
             break;
         }
     }
 
-    nk_end(nk);
 
     draw_demo_ui(nk);
 
@@ -254,6 +353,26 @@ void sp_client_shutdown() {
     snk_shutdown();
 }
 
+void sp_client_generate_username() {
+    dn_string_t adjective = sp_username_adjectives[sp_rng_ranged_u32(0, dn_arr_len(sp_username_adjectives) - 1)];
+    dn_string_t noun = sp_username_nouns[sp_rng_ranged_u32(0, dn_arr_len(sp_username_nouns) - 1)];
+
+    dn_string_builder_t builder = {
+        .allocator = &dn_allocators.bump.allocator,
+        .buffer = {
+            .data = sp_client.username.data,
+            .count = 0,
+            .capacity = SP_MAX_USERNAME_LEN,
+        }
+    };
+    dn_string_builder_append(&builder, adjective);
+    dn_string_builder_append(&builder, dn_string_literal("_"));
+    dn_string_builder_append(&builder, noun);
+
+    // @string Copy a string into a pre-allocated dn_string_t
+    dn_string_copy_to_str(dn_string_builder_write(&builder), &sp_client.username, SP_MAX_USERNAME_LEN);
+}
+
 
 ///////////////
 // WEBSOCKET //
@@ -267,13 +386,35 @@ void sp_client_process_response(sp_net_response_t* response) {
         case SP_OPCODE_REQUEST_TOKEN: {
             DN_LOG("SP_OPCODE_REQUEST_TOKEN");
             dn_os_memory_copy(&response->request_token.token, &sp_client.token, sizeof(sp_token_t));
-
-            DN_ASSERT(sp_client.state == SP_CLIENT_STATE_TOKEN_WAIT);
-            sp_client.state = SP_CLIENT_STATE_IDLE;
             break;
         }
-        case SP_OPCODE_MATCH_REQUEST: {
-            dn_log("SP_OPCODE_ECHO");
+        case SP_OPCODE_BEGIN_MATCH: {
+            DN_LOG("SP_OPCODE_BEGIN_MATCH");
+            sp_client.match_search.ready = true;
+            break;
+        }
+        case SP_OPCODE_MATCH_EVENT: {
+            DN_LOG("SP_OPCODE_MATCH_EVENT");
+            sp_client_process_match_event(&response->match_event);
+            break;
+        }
+        default: {
+            DN_UNREACHABLE();
+            break;
+        }
+    }
+}
+
+void sp_client_process_match_event(sp_net_match_event_t* event) {
+    switch(event->kind) {
+        case SP_MATCH_EVENT_BEGIN: {
+            DN_LOG("SP_MATCH_EVENT_BEGIN");
+            // @string Copy the opponent's over-the-wire username into a string
+            sp_client.match.username = dn_string_copy(dn_str_buffer_view(event->begin.username), &dn_allocators.standard.allocator);
+            dn_os_arr_copy(event->begin.hand, sp_client.match.hand);
+            dn_os_arr_copy(event->begin.energy, sp_client.match.energy);
+            dn_os_arr_copy(event->begin.opponent_energy, sp_client.match.opponent_energy);
+            sp_client.match.turn = event->begin.turn;
             break;
         }
         default: {
@@ -296,6 +437,7 @@ dn_string_t sp_client_state_to_string(sp_client_state_t state) {
         case SP_CLIENT_STATE_TOKEN_WAIT:         return dn_string_literal("SP_CLIENT_TOKEN_WAIT");
         case SP_CLIENT_STATE_IDLE:               return dn_string_literal("SP_CLIENT_IDLE");
         case SP_CLIENT_STATE_MATCH_WAIT:         return dn_string_literal("SP_CLIENT_MATCH_WAIT");
+        case SP_CLIENT_STATE_MATCH:              return dn_string_literal("SP_CLIENT_MATCH");
         default:                                 return dn_string_literal("SP_CLIENT_UNKNOWN");
     }
 }

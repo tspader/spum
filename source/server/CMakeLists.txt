@@ -30,3 +30,12 @@ target_include_directories(spums PRIVATE
 target_link_libraries(spums PRIVATE 
     ${SP_LIBS}
 )
+
+target_compile_options(spums PRIVATE
+    "-O0"
+    "-fsanitize=address"
+)
+    
+target_link_options(spums PRIVATE
+    "-fsanitize=address"
+)

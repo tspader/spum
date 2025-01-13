@@ -64,6 +64,25 @@ typedef u64 dn_hash_t;
 typedef char dn_asset_name_t [DN_ASSET_NAME_LEN];
 
 
+typedef dn_vector4_t dn_color_t;
+#define dn_rgb_255(red, green, blue) (dn_color_t) { .r = (red) / 255.f, .g = (green) / 255.f, .b = (blue) / 255.f, .a = 1.0 }
+#define dn_rgb_01(red, green, blue) (dn_color_t) { .r = red, .g = green, .b = blue, .a = 1.0 }
+
+typedef struct {
+  dn_color_t indian_red;
+
+  dn_color_t zomp;
+
+  dn_color_t selective_yellow;
+} dn_colors_t;
+
+dn_colors_t dn_colors = (dn_colors_t) {
+  .indian_red =       dn_rgb_255(180, 101, 111),
+  .zomp =             dn_rgb_255(99,  160, 136),
+  .selective_yellow = dn_rgb_255(250, 188, 42),
+};
+
+
 
 
 //  ███╗   ███╗ █████╗  ██████╗██████╗  ██████╗ ███████╗
@@ -111,6 +130,7 @@ typedef char dn_asset_name_t [DN_ASSET_NAME_LEN];
 #define DN_BROKEN() DN_ASSERT(false)
 
 #define dn_zero_initialize() { 0 }
+#define dn_zero_struct(t) (t){ 0 }
 #define dn_zero_return(t) { t __dn_zero_return = dn_zero_initialize(); return __dn_zero_return; }
 #define dn_type_name(t) (#t)
 
@@ -118,8 +138,13 @@ typedef char dn_asset_name_t [DN_ASSET_NAME_LEN];
 
 #define DN_FMT_U64 PRIu64
 
+#define dn_lval(type, rvalue) (&(type){ rvalue })
+
+#define dn_swap(t, a, b) { t dn_unique_name() = (a); (a) = (b); (b) = dn_unique_name(); }
+
 #include "gs.h"
 
+#define gs_hash_table_for(_HT, it) for (gs_hash_table_iter it = 0; gs_hash_table_iter_valid((_HT), it); gs_hash_table_iter_advance((_HT), it))
 
 
 //  ███╗   ███╗███████╗███╗   ███╗ ██████╗ ██████╗ ██╗   ██╗
@@ -186,9 +211,18 @@ DN_IMP void             dn_allocators_update();
 //  ███████║   ██║   ██║  ██║██║██║ ╚████║╚██████╔╝
 //  ╚══════╝   ╚═╝   ╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝ ╚═════╝ 
 typedef struct {
-  u8* data;
   u32 len;
+  u8* data;
 } dn_string_t;
+
+// dn_string_buffer_t is for defining fixed size, stack allocated strings that have a length attached. Then, you
+// can use dn_str_buffer_view() or dn_str_buffer_view_ptr() to turn it into a dn_string_t and use the normal
+// string APIs.
+#define dn_str_buffer_t(n) struct { u32 len; u8 data [n]; }
+#define dn_str_buffer_capacity(buffer) (sizeof((buffer)->data))
+#define dn_str_buffer_view(buffer) (dn_string_t) { .len = (buffer).len, .data = (buffer).data }
+#define dn_str_buffer_view_ptr(buffer) ((dn_string_t*)(buffer))
+#define dn_string_copy_to_str_buffer(str, buffer) { dn_string_copy_to((str), (buffer)->data, dn_str_buffer_capacity(buffer)); (buffer)->len = (str).len; }
 
 typedef char* dn_tstring_t;
 #define DN_MAX_PATH_LEN 256
@@ -204,6 +238,7 @@ typedef struct {
   dn_allocator_t* allocator;
 } dn_string_builder_t;
 
+#define dn_string_cstr(s) (dn_string_t){ .data = (u8*)(s), .len = strlen(s)}
 #define dn_string_literal(s) (dn_string_t){ .data = (u8*)(s), .len = sizeof(s) - 1}
 #define dn_tstring_builder() (dn_string_builder_t){ .buffer = dn_zero_initialize(), .allocator = &dn_allocators.bump.allocator }
 
@@ -213,20 +248,25 @@ DN_API void        dn_string_builder_append_cstr(dn_string_builder_t* builder, c
 DN_API void        dn_string_builder_append_fmt(dn_string_builder_t* builder, dn_string_t fmt, ...);
 DN_API dn_string_t dn_string_builder_write(dn_string_builder_t* builder);
 DN_API char*       dn_string_builder_write_cstr(dn_string_builder_t* builder);
-DN_IMP char*       dn_cstr_copy_n(const char* str, u32 length, dn_allocator_t* allocator);
+
 DN_IMP char*       dn_cstr_copy(const char* str, dn_allocator_t* allocator);
+DN_IMP char*       dn_cstr_copy_n(const char* str, u32 length, dn_allocator_t* allocator);
 DN_IMP char*       dn_cstr_copy_u8(const u8* str, u32 length, dn_allocator_t* allocator);
 DN_API void        dn_cstr_copy_to(const char* str, char* buffer, u32 buffer_length);
 DN_API void        dn_cstr_copy_to_n(const char* str, u32 length, char* buffer, u32 buffer_length);
-DN_API char*       dn_string_to_cstr(dn_string_t str);
-DN_API char*       dn_string_to_cstr_ex(dn_string_t str, dn_allocator_t* allocator);
-DN_API bool        dn_string_equal(dn_string_t a, dn_string_t b);
-DN_API bool        dn_string_equal_cstr(dn_string_t a, const char* b);
 DN_API bool        dn_cstr_equal(const char* a, const char* b);
 DN_API u32         dn_cstr_len(const char* str);
-DN_API dn_string_t dn_string_copy_cstr(const char* str, dn_allocator_t* allocator);
-DN_API dn_string_t dn_string_copy(dn_string_t str, dn_allocator_t* allocator);
 
+DN_API char*       dn_string_to_cstr(dn_string_t str);
+DN_API char*       dn_string_to_cstr_ex(dn_string_t str, dn_allocator_t* allocator);
+DN_API dn_string_t dn_string_copy(dn_string_t str, dn_allocator_t* allocator);
+DN_API dn_string_t dn_string_copy_cstr_n(const char* str, u32 length, dn_allocator_t* allocator);
+DN_API dn_string_t dn_string_copy_cstr(const char* str, dn_allocator_t* allocator);
+DN_API void        dn_string_copy_to_str(dn_string_t str, dn_string_t* dest, u32 capacity);
+DN_API void        dn_string_copy_to(dn_string_t str, u8* buffer, u32 capacity);
+DN_API dn_string_t dn_string_alloc(u32 capacity, dn_allocator_t* allocator);
+DN_API bool        dn_string_equal(dn_string_t a, dn_string_t b);
+DN_API bool        dn_string_equal_cstr(dn_string_t a, const char* b);
 
 //   ██████╗ ███████╗
 //  ██╔═══██╗██╔════╝
@@ -279,6 +319,8 @@ DN_API void                         dn_os_fill_memory_u8(void* buffer, u32 buffe
 DN_API void                         dn_os_zero_memory(void* buffer, u32 buffer_size);
 DN_IMP dn_os_file_attr_t            dn_os_winapi_attr_to_dn_attr(u32 attr);
 
+#define dn_os_arr_copy(source, dest) { static_assert(sizeof(source) == sizeof(dest), "dn_os_arr_copy expects two C arrays of the same size"); dn_os_memory_copy(source, dest, sizeof(dest)); }
+
 
 //  ██╗  ██╗ █████╗ ███████╗██╗  ██╗██╗███╗   ██╗ ██████╗ 
 //  ██║  ██║██╔══██╗██╔════╝██║  ██║██║████╗  ██║██╔════╝ 
@@ -327,7 +369,7 @@ typedef struct {
   dn_allocator_t* allocator;
 } dn_fixed_array_t;
 
-#define dn_fixed_array(t) dn_fixed_array_t
+#define dn_fixed_array(t, n) dn_fixed_array_t
 
 DN_API void dn_fixed_array_init(dn_fixed_array_t* fixed_array, u32 max_vertices, u32 element_size, dn_allocator_t* allocator);
 DN_API u8*  dn_fixed_array_push(dn_fixed_array_t* fixed_array, void* data, u32 count);
@@ -392,6 +434,7 @@ dn_pool_handle_t dn_pool_invalid_handle();
 bool             dn_pool_is_handle_valid(dn_pool_handle_t handle);
 bool             dn_pool_slot_has_next_free(dn_pool_slot_t* slot);
 bool             dn_pool_slot_is_match(dn_pool_slot_t* slot, dn_pool_handle_t handle);
+#define dn_pool_at(T, POOL, HANDLE) ((T*)((POOL)->data + ((HANDLE).index * (POOL)->element_size)))
 
 /////////////////
 // RING BUFFER //
@@ -463,6 +506,69 @@ DN_IMP void dn_log_init();
 #define DN_LOG(fmt, ...) dn_log("%s: " fmt, __func__, __VA_ARGS__)
 
 
+//  ████████╗███████╗███████╗████████╗██╗███╗   ██╗ ██████╗ 
+//  ╚══██╔══╝██╔════╝██╔════╝╚══██╔══╝██║████╗  ██║██╔════╝ 
+//     ██║   █████╗  ███████╗   ██║   ██║██╔██╗ ██║██║  ███╗
+//     ██║   ██╔══╝  ╚════██║   ██║   ██║██║╚██╗██║██║   ██║
+//     ██║   ███████╗███████║   ██║   ██║██║ ╚████║╚██████╔╝
+//     ╚═╝   ╚══════╝╚══════╝   ╚═╝   ╚═╝╚═╝  ╚═══╝ ╚═════╝ 
+#define DN_TEST_COLOR_BOLD "\033[1m"
+#define DN_TEST_COLOR_RESET "\033[0m"
+#define DN_TEST_COLOR_SUCCESS "\033[32m"
+#define DN_TEST_COLOR_DESC "\033[33m"
+#define DN_TEST_COLOR_FAIL "\033[31m"
+#define DN_TEST_COLOR_MIXED "\033[35m"
+
+typedef enum {
+  DN_TEST_CONTEXT_FLAG_DEFAULT = 0,
+  DN_TEST_CONTEXT_FLAG_LOG_FAILURE = 1 << 0,
+  DN_TEST_CONTEXT_FLAG_LOG_SUCCESS = 1 << 1,
+} dn_test_context_flags_t;
+
+typedef struct {
+  dn_string_t description;
+  bool success;
+} dn_assertion_t;
+
+typedef struct {
+  dn_string_t name;
+  bool success;
+  u32 num_assertions;
+  dn_dynamic_array(dn_assertion_t) assertions;
+} dn_test_context_t;
+
+typedef struct {
+  dn_string_t name;
+  dn_test_context_flags_t flags;
+  dn_dynamic_array(dn_test_context_t) tests;
+} dn_test_suite_t;
+
+typedef struct {
+  dn_test_suite_t* suite;
+  dn_test_context_t* context;
+} dn_tests_t;
+dn_tests_t dn_tests;
+
+#define dn_test_assert_ex(desc, condition) \
+do { \
+  dn_assertion_t* assertion = (dn_assertion_t*)dn_dynamic_array_push(&dn_tests.context->assertions, dn_lval(dn_assertion_t, dn_zero_initialize()), 1); \
+  assertion->description = desc; \
+  assertion->success = (condition); \
+  dn_tests.context->num_assertions++;  \
+} while (false);
+
+#define dn_test_assert(condition)            dn_test_assert_ex(dn_string_literal(dn_macro_str(condition)), (condition))
+#define dn_test_assert_desc(desc, condition) dn_test_assert_ex(dn_string_literal(desc),                    (condition))
+
+void dn_test_init();
+void dn_test_context_init(dn_test_context_t* context);
+void dn_test_suite_init(dn_test_suite_t* suite);
+void dn_test_begin_suite(dn_test_suite_t* suite);
+void dn_test_begin(dn_string_t name);
+void dn_test_end();
+void dn_test_end_suite();
+
+
 //  ███╗   ██╗██╗   ██╗██╗  ██╗██╗     ███████╗ █████╗ ██████╗ 
 //  ████╗  ██║██║   ██║██║ ██╔╝██║     ██╔════╝██╔══██╗██╔══██╗
 //  ██╔██╗ ██║██║   ██║█████╔╝ ██║     █████╗  ███████║██████╔╝
@@ -471,11 +577,14 @@ DN_IMP void dn_log_init();
 //  ╚═╝  ╚═══╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝
 #ifdef DN_NUKLEAR
 typedef struct nk_context nk_context;
+typedef struct nk_color nk_color;
 
 #define NK_RATIO(...) ((float []){ __VA_ARGS__ })
 
 void nk_dn_string(struct nk_context* nk, dn_string_t str, nk_flags flags);
+void nk_dn_string_colored(struct nk_context* nk, dn_string_t str, nk_flags flags, dn_color_t color);
 void nk_edit_dn_string(struct nk_context* nk, nk_flags flags, dn_string_t* buffer, u32 max_len, nk_plugin_filter filter);
+nk_color dn_color_to_nk_color(dn_color_t color);
 #endif
 
 
@@ -488,22 +597,21 @@ void nk_edit_dn_string(struct nk_context* nk, nk_flags flags, dn_string_t* buffe
 //  ╚═╝╚═╝     ╚═╝╚═╝     ╚══════╝╚══════╝╚═╝     ╚═╝╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚═╝  ╚═╝   ╚═╝   ╚═╝ ╚═════╝ ╚═╝  ╚═══╝
 #ifdef DN_IMPL
 
-void dn_init() {
-  dn_allocators_init();
-  dn_log_init();
-}
-
-void dn_update() {
-  dn_allocators_update();
-}
-
 #ifdef DN_NUKLEAR
 void nk_dn_string(struct nk_context* nk, dn_string_t str, nk_flags flags) {
   nk_text(nk, (char*)str.data, (i32)str.len, flags);
 }
 
+void nk_dn_string_colored(struct nk_context* nk, dn_string_t str, nk_flags flags, dn_color_t color) {
+  nk_text_colored(nk, (char*)str.data, (i32)str.len, flags, dn_color_to_nk_color(color));
+}
+
 void nk_edit_dn_string(struct nk_context* nk, nk_flags flags, dn_string_t* buffer, u32 max_len, nk_plugin_filter filter) {
   nk_edit_string(nk, flags, (char*)buffer->data, (i32*)&buffer->len, max_len, filter);
+}
+
+nk_color dn_color_to_nk_color(dn_color_t color) {
+  return nk_rgba(color.r * 255, color.g * 255, color.b * 255, color.a * 255);
 }
 #endif
 
@@ -599,7 +707,7 @@ void* dn_ring_buffer_push_overwrite_zero(dn_ring_buffer_t* buffer) {
 void* dn_ring_buffer_pop(dn_ring_buffer_t* buffer) {
 	DN_ASSERT(buffer->size);
 
-	void* element = buffer->data + buffer->head;
+	void* element = buffer->data + (buffer->head * buffer->element_size);
 	buffer->head = (buffer->head + 1) % buffer->capacity;
 	buffer->size--;
 	return element;
@@ -662,6 +770,7 @@ dn_ring_buffer_iterator_t dn_ring_buffer_riter(dn_ring_buffer_t* buffer) {
 void dn_pool_init(dn_pool_t* pool, u32 capacity, u32 element_size) {
 	pool->capacity = capacity;
 	pool->free_list = 0;
+  pool->element_size = element_size;
 	pool->data = (u8*)dn_allocator_alloc(&dn_allocators.standard.allocator, capacity * element_size);
 	pool->slots = (dn_pool_slot_t*)dn_allocator_alloc(&dn_allocators.standard.allocator, capacity * sizeof(dn_pool_slot_t));
 
@@ -690,10 +799,28 @@ dn_pool_handle_t dn_pool_insert(dn_pool_t* pool, void* value) {
 	return handle;
 }
 
+dn_pool_handle_t dn_pool_reserve(dn_pool_t* pool) {
+	assert(!pool->slots[pool->free_list].occupied);
+	
+  dn_pool_slot_t* slot = pool->slots + pool->free_list;
+	slot->occupied = true;
+	slot->generation++;
+
+  dn_os_zero_memory(pool->data + pool->element_size * pool->free_list, pool->element_size);
+
+	dn_pool_handle_t handle;
+	handle.index = pool->free_list;
+	handle.generation = slot->generation;
+	
+	pool->free_list = slot->next_free;
+	
+	return handle;
+}
+
 void dn_pool_remove(dn_pool_t* pool, dn_pool_handle_t handle) {
 	if (handle.index >= pool->capacity) return;
 	
-  dn_pool_slot_t* slot = pool->slots + pool->free_list;
+  dn_pool_slot_t* slot = pool->slots + handle.index;
   if (!dn_pool_slot_is_match(slot, handle)) return;
   if (!dn_pool_slot_has_next_free(slot)) return;
 
@@ -702,7 +829,6 @@ void dn_pool_remove(dn_pool_t* pool, dn_pool_handle_t handle) {
 	slot->next_free = pool->free_list;
 	pool->free_list = handle.index;
 }
-
 
 bool dn_pool_contains(dn_pool_t* pool, dn_pool_handle_t handle) {
 	if (handle.index >= pool->capacity) return false;
@@ -812,7 +938,7 @@ dn_hash_t dn_combine_hashes(dn_hash_t a, dn_hash_t b) {
 }
 
 dn_hash_t dn_hash_cstr_dumb(const char* str) {
-  return dn_hash_str_dumb(dn_string_literal(str));
+  return dn_hash_str_dumb(dn_string_cstr(str));
 }
 
 dn_hash_t dn_hash_str_dumb(dn_string_t str) {
@@ -820,8 +946,8 @@ dn_hash_t dn_hash_str_dumb(dn_string_t str) {
   
   size_t result = 0;
   for (int i = 0; i < str.len; i++) {
-        result = str.data[i] + (result * prime);
-    }
+    result = str.data[i] + (result * prime);
+  }
     return result;
 }
 
@@ -956,6 +1082,13 @@ char* dn_string_to_cstr_ex(dn_string_t str, dn_allocator_t* allocator) {
   return dn_cstr_copy_n((char*)str.data, str.len, allocator);
 }
 
+dn_string_t dn_string_alloc(u32 capacity, dn_allocator_t* allocator) {
+  return (dn_string_t){
+    .len = 0,
+    .data = (u8*)dn_allocator_alloc(allocator, capacity),
+  };
+}
+
 bool dn_string_equal(dn_string_t a, dn_string_t b) {
   if (a.len != b.len) return false;
 
@@ -986,6 +1119,15 @@ u32 dn_cstr_len(const char* str) {
   return len;
 }
 
+dn_string_t dn_string_copy_cstr_n(const char* str, u32 length, dn_allocator_t* allocator) {
+  dn_string_t copy;
+  copy.len = dn_cstr_len(str);
+  copy.data = (u8*)dn_allocator_alloc(allocator, copy.len);
+
+  dn_os_memory_copy(str, copy.data, copy.len);
+  return copy;  
+}
+
 dn_string_t dn_string_copy_cstr(const char* str, dn_allocator_t* allocator) {
   dn_string_t copy;
   copy.len = dn_cstr_len(str);
@@ -997,12 +1139,21 @@ dn_string_t dn_string_copy_cstr(const char* str, dn_allocator_t* allocator) {
 
 dn_string_t dn_string_copy(dn_string_t str, dn_allocator_t* allocator) {
   dn_string_t copy = {
-    (u8*)dn_allocator_alloc(allocator, str.len),
-    str.len
+    .len = str.len,
+    .data = (u8*)dn_allocator_alloc(allocator, str.len),
   };
 
   dn_os_memory_copy(str.data, copy.data, str.len);
   return copy;
+}
+
+void dn_string_copy_to_str(dn_string_t source, dn_string_t* dest, u32 capacity) {
+  dest->len = dn_min(source.len, capacity);
+  dn_os_memory_copy(source.data, dest->data, dest->len);
+}
+
+void dn_string_copy_to(dn_string_t str, u8* buffer, u32 capacity) {
+  dn_os_memory_copy(str.data, buffer, dn_min (str.len, capacity));
 }
 
 void dn_string_builder_grow(dn_string_builder_t* builder, u32 requested_capacity) {
@@ -1228,7 +1379,7 @@ void* dn_bump_allocator_on_alloc(dn_allocator_t* allocator, dn_allocator_mode_t 
       } 
 
       void* memory_block = allocator->on_alloc(allocator, DN_ALLOCATOR_MODE_ALLOC, size, NULL);
-      dn_os_memory_copy(old_memory, memory_block, size);
+      dn_os_memory_copy(old_memory, memory_block, old_size);
       return memory_block;
 
     }
@@ -1295,6 +1446,240 @@ void dn_allocators_init() {
 
 void dn_allocators_update() {
 	dn_bump_allocator_clear(&dn_allocators.bump);
+}
+
+void dn_test_context_init(dn_test_context_t* context) {
+  dn_dynamic_array_init(&context->assertions, sizeof(dn_assertion_t), &dn_allocators.bump.allocator);
+}
+
+void dn_test_suite_init(dn_test_suite_t* suite) {
+  dn_dynamic_array_init(&suite->tests, sizeof(dn_test_suite_t), &dn_allocators.bump.allocator);
+}
+
+void dn_test_begin_suite(dn_test_suite_t* suite) {
+  dn_test_suite_init(suite);
+  dn_tests.suite = suite;
+}
+
+void dn_test_end_suite() {
+  dn_test_suite_t* suite = dn_tests.suite;
+  dn_log("%s", dn_string_to_cstr(suite->name));
+
+  dn_for(i, dn_tests.suite->tests.size) {
+    dn_test_context_t* context = (dn_test_context_t*)dn_dynamic_array_at(&dn_tests.suite->tests, i);
+
+    bool found_success = false;
+    bool found_failure = false;
+    dn_for(i, context->assertions.size) {
+      dn_assertion_t* assertion = (dn_assertion_t*)dn_dynamic_array_at(&context->assertions, i);
+      found_success |= assertion->success;
+      found_failure |= !assertion->success;
+    }
+
+    const char* test_color = DN_TEST_COLOR_SUCCESS;
+    if (found_failure && !found_success) test_color = DN_TEST_COLOR_FAIL;
+    if (!found_failure && found_success) test_color = DN_TEST_COLOR_SUCCESS;
+    if (found_failure && found_success) test_color = DN_TEST_COLOR_MIXED;
+
+    dn_log("  %s%s%s%s", DN_TEST_COLOR_BOLD, test_color, dn_string_to_cstr(context->name), DN_TEST_COLOR_RESET);
+
+    dn_for(i, context->assertions.size) {
+      dn_assertion_t* assertion = (dn_assertion_t*)dn_dynamic_array_at(&context->assertions, i);
+
+      bool log_assertion = 
+        ((suite->flags & DN_TEST_CONTEXT_FLAG_LOG_SUCCESS) && assertion->success) ||
+        ((suite->flags & DN_TEST_CONTEXT_FLAG_LOG_FAILURE) && !assertion->success) ||
+        (suite->flags == DN_TEST_CONTEXT_FLAG_DEFAULT);
+      const char* assertion_color = assertion->success ? DN_TEST_COLOR_SUCCESS : DN_TEST_COLOR_FAIL;  
+      if (log_assertion) {
+        dn_log("  %s-> %s%s", assertion_color, dn_string_to_cstr(assertion->description),  DN_TEST_COLOR_RESET);
+      }
+    }
+  }
+}
+
+
+void dn_test_begin(dn_string_t name) {
+  dn_test_context_t* context = (dn_test_context_t*)dn_dynamic_array_reserve(&dn_tests.suite->tests, 1);
+  context->name = name;
+  dn_test_context_init(context);
+  dn_tests.context = context;
+}
+
+void dn_test_end() {
+}
+
+void dn_gen_arena_test() {
+  dn_test_suite_t suite = {
+    .name = dn_string_literal("dn_gen_arena_t"),
+    .flags = DN_TEST_CONTEXT_FLAG_DEFAULT
+  };
+  dn_test_begin_suite(&suite);
+
+  dn_test_begin(dn_string_literal("dn_gen_arena"));
+    dn_pool(u32) arena = dn_zero_initialize();
+    dn_pool_init(&arena, 32, sizeof(u32));
+    dn_pool_handle_t rza = dn_pool_insert(&arena, dn_lval(u32, 69));
+    dn_pool_handle_t gza = dn_pool_insert(&arena, dn_lval(u32, 420));
+    dn_pool_handle_t bill = dn_pool_insert(&arena, dn_lval(u32, 7));
+    
+    dn_test_assert(*dn_pool_at(u32, &arena, rza) == 69);
+    dn_test_assert(*dn_pool_at(u32, &arena, gza) == 420);
+    dn_test_assert(*dn_pool_at(u32, &arena, bill) == 7);
+
+    dn_pool_remove(&arena, bill);
+
+    dn_pool_handle_t murray = dn_pool_insert(&arena, dn_lval(u32, 9001));
+    dn_test_assert(!dn_pool_contains(&arena, bill));
+    dn_test_assert(dn_pool_contains(&arena, murray));
+    dn_test_assert(*dn_pool_at(u32, &arena, murray) == 9001);
+  dn_test_end();
+
+  dn_test_end_suite();
+}
+
+void dn_string_test() {
+  typedef struct {
+    dn_string_t jerry;
+    dn_string_t garcia;
+    const char* jerry_cstr;
+  } dn_strings_t;
+
+  dn_strings_t data = {
+    .jerry  = dn_string_literal("jerry garcia"),
+    .garcia = dn_string_literal("jerry garcia"),
+    .jerry_cstr = "jerry garcia",
+  };
+
+  dn_test_suite_t suite = {
+    .name = dn_string_literal("dn_string_t"),
+  };
+  dn_test_begin_suite(&suite);
+
+  dn_test_begin(dn_string_literal("dn_string_literal"));
+  dn_test_assert(data.jerry.len == strlen(data.jerry_cstr));
+  dn_test_end();
+
+  // u32                dn_cstr_len(const char* str);
+  dn_test_begin(dn_string_literal("dn_cstr_len"));
+  dn_test_assert(dn_cstr_len(data.jerry_cstr) == 12);
+  dn_test_assert(dn_cstr_len("") == 0);
+  dn_test_end();
+
+  // bool               dn_cstr_equal(const char* a, const char* b);
+  dn_test_begin(dn_string_literal("dn_cstr_equal"));
+  dn_test_assert(dn_cstr_equal(data.jerry_cstr, data.jerry_cstr));
+  dn_test_end();
+
+  // DN_API bool        dn_string_equal(dn_string_t a, dn_string_t b);
+  dn_test_begin(dn_string_literal("dn_string_equal"));
+  dn_test_assert(dn_string_equal(data.jerry, data.garcia));
+  dn_test_end();
+
+  // DN_API bool        dn_string_equal_cstr(dn_string_t a, const char* b);
+  dn_test_begin(dn_string_literal("dn_string_equal_cstr"));
+  dn_test_assert(dn_string_equal_cstr(data.jerry, data.jerry_cstr));
+  dn_test_end();
+
+  // DN_API dn_string_t dn_string_copy(dn_string_t str, dn_allocator_t* allocator);
+  dn_test_begin(dn_string_literal("dn_string_copy"));
+  dn_string_t jerry_from_dn = dn_string_copy(data.jerry,  &dn_allocators.bump.allocator);
+  dn_test_assert(dn_string_equal(data.jerry, jerry_from_dn));
+  dn_test_end();
+
+  // DN_API dn_string_t dn_string_copy_cstr(const char* str, dn_allocator_t* allocator);
+  dn_test_begin(dn_string_literal("dn_string_copy_cstr"));
+  dn_string_t jerry_from_cstr = dn_string_copy_cstr(data.jerry_cstr,  &dn_allocators.bump.allocator);
+  dn_test_assert(dn_string_equal(data.jerry, jerry_from_cstr));
+  dn_test_end();
+
+  // DN_API char*       dn_string_to_cstr_ex(dn_string_t str, dn_allocator_t* allocator);
+  dn_test_begin(dn_string_literal("dn_string_to_cstr_ex"));
+  char* jerry_cstr = dn_string_to_cstr_ex(data.jerry, &dn_allocators.bump.allocator);
+  dn_test_assert(dn_cstr_len(jerry_cstr) == dn_cstr_len(data.jerry_cstr));
+  dn_test_assert(dn_cstr_equal(jerry_cstr, data.jerry_cstr));
+  dn_test_end();
+
+  dn_test_end_suite();
+
+  // DN_IMP char*       dn_cstr_copy(const char* str, u32 length, dn_allocator_t* allocator = nullptr);
+  // DN_IMP char*       dn_cstr_copy(const char* str, dn_allocator_t* allocator = nullptr);
+  // DN_IMP char*       dn_cstr_copy(const std::string& str, dn_allocator_t* allocator = nullptr);
+  // DN_IMP char*       dn_cstr_copy_u8(const u8* str, u32 length, dn_allocator_t* allocator = nullptr);
+  // DN_API void        dn_cstr_copy(const char* str, char* buffer, u32 buffer_length);
+  // DN_API void        dn_cstr_copy_n(const char* str, u32 length, char* buffer, u32 buffer_length);
+}
+
+void dn_string_builder_test() {
+  dn_test_suite_t suite = {
+    .name = dn_string_literal("dn_string_t"),
+  };
+  dn_test_begin_suite(&suite);
+
+  // DN_API void        dn_string_builder_grow(dn_string_builder_t* builder);
+  dn_test_begin(dn_string_literal("dn_string_builder_grow")); 
+  {
+    dn_string_builder_t builder = { .buffer = dn_zero_initialize(), .allocator = &dn_allocators.bump.allocator };
+    dn_string_builder_grow(&builder, 32);
+    dn_test_assert(builder.buffer.capacity >= 32);
+    dn_string_builder_grow(&builder, 8);
+    dn_test_assert(builder.buffer.capacity >= 32);
+    dn_string_builder_grow(&builder, 64);
+    dn_test_assert(builder.buffer.capacity >= 64);
+  }
+  dn_test_end();
+
+  // DN_API void        dn_string_builder_append(dn_string_builder_t* builder, dn_string_t str);
+  // DN_API void        dn_string_builder_append_cstr(dn_string_builder_t* builder, const char* str);
+  // DN_API dn_string_t dn_string_builder_write(dn_string_builder_t* builder);
+  dn_test_begin(dn_string_literal("dn_string_builder_append"));
+  {
+    dn_string_builder_t builder = { .buffer = dn_zero_initialize(), .allocator = &dn_allocators.bump.allocator };
+    dn_string_builder_append(&builder, dn_string_literal("jerry"));
+    dn_string_builder_append_cstr(&builder, "/");
+    dn_string_builder_append(&builder, dn_string_literal("garcia"));
+    dn_test_assert(dn_string_equal(dn_string_builder_write(&builder), dn_string_literal("jerry/garcia")));
+  }
+  dn_test_end();
+
+  // DN_API char*       dn_string_builder_write_cstr(dn_string_builder_t* builder);
+  dn_test_begin(dn_string_literal("dn_string_builder_write_cstr"));
+  {
+    dn_string_builder_t builder = { .buffer = dn_zero_initialize(), .allocator = &dn_allocators.bump.allocator };
+    dn_string_builder_append(&builder, dn_string_literal("jerry"));
+    dn_test_assert(dn_cstr_equal(dn_string_builder_write_cstr(&builder), "jerry"));
+  }
+  dn_test_end();
+
+  // DN_API void        dn_string_builder_append_fmt(dn_string_builder_t* builder, dn_string_t fmt, ...);
+  dn_test_begin(dn_string_literal("dn_string_builder_write_fmt"));
+  {
+    dn_string_builder_t builder = { .buffer = dn_zero_initialize(), .allocator = &dn_allocators.bump.allocator };
+    dn_string_builder_append_fmt(&builder, dn_string_literal("%d:%.2f:%s"), 69, 420.69, "blazeit");
+    dn_test_assert(dn_string_equal(dn_string_builder_write(&builder), dn_string_literal("69:420.69:blazeit")));
+  }
+  dn_test_end();
+
+  dn_test_end_suite();
+}
+
+void dn_test_run_internal() {
+  dn_string_test();
+  dn_string_builder_test();
+  dn_gen_arena_test();
+}
+
+void dn_init() {
+  dn_allocators_init();
+  dn_log_init();
+
+  #ifdef DN_RUN_INTERNAL_TESTS
+  dn_test_run_internal();
+  #endif
+}
+
+void dn_update() {
+  dn_allocators_update();
 }
 
 #endif

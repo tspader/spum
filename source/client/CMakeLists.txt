@@ -30,7 +30,6 @@ target_include_directories(spumc PRIVATE
 target_compile_definitions(spumc PRIVATE SOKOL_GLES3=1)
 
 target_compile_options(spumc PRIVATE
-    "-std=c11"
     "-O0"
 )
 

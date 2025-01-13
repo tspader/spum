@@ -9,10 +9,13 @@
 // add basic buttons 
 
 typedef u64 sp_token_t;
+typedef u64 sp_match_id_t;
 
 typedef u8 sp_net_magic_t [8];
 sp_net_magic_t sp_magic = { 0x69, 0x69, 0x69, 'j', 'e', 'r', 'r', 'y'};
 
+#define SP_MAX_USERNAME_LEN 64
+typedef dn_str_buffer_t(SP_MAX_USERNAME_LEN) sp_username_t;
 
 /////////////////////////
 // CLIENT REQUESTS OPS //
@@ -21,6 +24,8 @@ typedef enum {
   SP_OPCODE_ECHO = 0,
   SP_OPCODE_REQUEST_TOKEN = 1,
   SP_OPCODE_MATCH_REQUEST = 10,
+  SP_OPCODE_BEGIN_MATCH = 20,
+  SP_OPCODE_MATCH_EVENT = 100
 } sp_net_opcode_t;
 
 #define SP_MAX_PASSWORD_LEN 16
@@ -35,6 +40,9 @@ typedef struct {
   u32 value;
 } sp_net_echo_request_t;
 
+typedef struct {
+  sp_username_t username;
+} sp_net_token_request_t;
 
 typedef struct {
   sp_net_magic_t magic;
@@ -43,8 +51,30 @@ typedef struct {
   union {
     sp_net_echo_request_t echo;
     sp_net_match_request_t match;
+    sp_net_token_request_t token_req;
   };
 } sp_net_request_t;
+
+
+//////////////////
+// MATCH EVENTS //
+//////////////////
+typedef struct {
+  sp_username_t username;
+  sp_card_id_t hand [SP_HAND_SIZE];
+  sp_pokemon_type_t energy [2];
+  sp_pokemon_type_t opponent_energy [2];
+  sp_turn_order_t turn;
+} sp_net_begin_match_data_t;
+
+
+typedef struct {
+  sp_match_event_t kind;
+
+  union {
+    sp_net_begin_match_data_t begin;
+  };
+} sp_net_match_event_t;
 
 
 //////////////////////
@@ -66,6 +96,7 @@ typedef struct {
   union {
     sp_net_echo_response_t echo;
     sp_net_request_token_response_t request_token;
+    sp_net_match_event_t match_event;
   };
 } sp_net_response_t;
 

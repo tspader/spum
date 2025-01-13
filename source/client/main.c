@@ -29,16 +29,14 @@
 #define DN_IMPL
 #include "dn.h"
 
-#include "simulator.h"
-#include "network.h"
+#include "sp.h"
+
 #include "app.h"
 
 #define SP_CLIENT_APP_IMPL
 #include "app.h"
-#define SP_NETWORK_IMPL
-#include "network.h"
-#define SP_SIMULATOR_IMPL
-#include "simulator.h"
+#define SP_IMPL
+#include "sp.h"
 
 sapp_desc sokol_main(int num_args, char** args) {
     return (sapp_desc){
