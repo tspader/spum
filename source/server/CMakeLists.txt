@@ -9,7 +9,7 @@ set(SP_SOURCE_DIR ${SP_PROJECT_ROOT}/source)
 set(SP_INCLUDE_DIR ${SP_PROJECT_ROOT}/external/include)
 set(SP_FILE_DIR $<TARGET_FILE_DIR:spums>)
 set(SP_SOURCES main.c)
-set(SP_LIBS websockets ssl crypto cap z pthread)
+set(SP_LIBS websockets ssl crypto cap z pthread m)
 
 target_sources(spums PRIVATE
     ${SP_SOURCES}

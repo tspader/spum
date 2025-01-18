@@ -136,7 +136,57 @@ dn_string_t sp_username_nouns [] = {
     dn_string_literal("vessel"),
     dn_string_literal("gorge")
 };
+
+sp_match_data_t sp_sample_match = {
+  .state = SP_MATCH_STATE_SETUP,
+  .order_flip = SP_RNG_FLIP_HEADS,
+  .players = {
+    {
+      .active = {
+        .card = SP_CARD_BULBASAUR,
+        .hp = 30
+      },
+      .bench = { 
+        { .card = SP_CARD_BULBASAUR, .hp = 60 }, 
+      },
+      .hand = { 
+          SP_CARD_BULBASAUR, 
+          SP_CARD_ODDISH, 
+          SP_CARD_WEEDLE,
+          SP_CARD_ODDISH, 
+          SP_CARD_BULBASAUR 
+      },
+      .discard = dn_zero_initialize(),
+      .energy = { 
+          SP_POKEMON_TYPE_GRASS, 
+          SP_POKEMON_TYPE_GRASS 
+      },
+    },
+    {
+      .active = {
+        .card = SP_CARD_WEEDLE,
+        .hp = 50
+      },            
+      .bench = { 
+        { .card = SP_CARD_WEEDLE, .hp = 40 }, 
+      },
+      .hand = { 
+          SP_CARD_WEEDLE, 
+          SP_CARD_ODDISH, 
+          SP_CARD_BULBASAUR,
+          SP_CARD_ODDISH, 
+          SP_CARD_ODDISH 
+      },
+      .discard = dn_zero_initialize(),
+      .energy = { 
+          SP_POKEMON_TYPE_FIRE, 
+          SP_POKEMON_TYPE_FIRE 
+      },
+    },
+  }
+};
 #endif
+
 
 #ifdef SP_IMPL
 #define SP_SIMULATOR_IMPL
@@ -184,6 +234,38 @@ void sp_test() {
     dn_test_assert(player.deck[SP_DECK_MAX_INDEX] == SP_CARD_NONE);
     dn_test_assert(sp_player_hand_size(&player) == 1);
     dn_test_assert(sp_player_deck_size(&player) == 19);
+  }
+  dn_test_end();
+
+  dn_test_begin(dn_string_literal("sp_player_remove_from_pile")); {
+    sp_player_t player = dn_zero_struct(sp_player_t);
+    sp_player_init(&player, &deck);
+    dn_os_memory_copy(
+      dn_arr_lval(sp_card_id_t, SP_CARD_BULBASAUR, SP_CARD_IVYSAUR, SP_CARD_VENUSAUR, SP_CARD_VENUSAUR_EX, SP_CARD_WEEDLE), 
+      player.hand,
+      sizeof(sp_card_id_t) * 5);
+
+    sp_card_id_t hand [5] = dn_zero_initialize();
+    dn_for(index, 5) {
+      hand[index] = player.hand[index];
+    }
+
+    sp_player_remove_from_hand(&player, hand[0]);
+    dn_test_assert(sp_player_hand_size(&player) == 4);
+    dn_test_assert(player.hand[0] == hand[1]);
+    dn_test_assert(player.hand[1] == hand[2]);
+    dn_test_assert(player.hand[2] == hand[3]);
+    dn_test_assert(player.hand[3] == hand[4]);
+    dn_test_assert(player.hand[4] == SP_CARD_NONE);
+
+    sp_player_remove_from_hand(&player, hand[3]);
+    dn_test_assert(sp_player_hand_size(&player) == 3);
+    dn_test_assert(player.hand[0] == hand[1]);
+    dn_test_assert(player.hand[1] == hand[2]);
+    dn_test_assert(player.hand[2] == hand[4]);
+    dn_test_assert(player.hand[3] == SP_CARD_NONE);
+    dn_test_assert(player.hand[4] == SP_CARD_NONE);
+
   }
   dn_test_end();
 

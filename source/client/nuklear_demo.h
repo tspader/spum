@@ -41,7 +41,7 @@ draw_demo_ui(struct nk_context *ctx)
     if (scale_left) window_flags |= NK_WINDOW_SCALE_LEFT;
     if (minimizable) window_flags |= NK_WINDOW_MINIMIZABLE;
 
-    if (nk_begin(ctx, "Overview", nk_rect(500, 500, 400, 600), window_flags))
+    if (nk_begin(ctx, "Overview", nk_rect(10, 820, 400, 380), window_flags))
     {
         if (show_menu)
         {
@@ -1307,3 +1307,4 @@ draw_demo_ui(struct nk_context *ctx)
     nk_end(ctx);
     return !nk_window_is_closed(ctx, "Overview");
 }
+

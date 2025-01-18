@@ -27,63 +27,11 @@ typedef float f32;
 typedef double f64;
 #endif
 
-#ifdef DN_MATH_BACKEND_HANDMADE
-#include "HandmadeMath.h"
-typedef HMM_Vec2 dn_vector2_t;
-typedef HMM_Vec3 dn_vector3_t;
-typedef HMM_Vec4 dn_vector4_t;
-#else 
-typedef struct {
-  float x;
-  float y;
-} dn_vector2_t;
-
-typedef struct {
-  float x;
-  float y;
-  float z;
-} dn_vector3_t;
-
-typedef struct {
-  float x;
-  float y;
-  float z;
-  float w;
-} dn_vector4_t;
-#endif
-
-typedef struct {
-	i32 x;
-	i32 y;
-} dn_vector2i_t;
-
 
 typedef u64 dn_hash_t;
 
 #define DN_ASSET_NAME_LEN 64
 typedef char dn_asset_name_t [DN_ASSET_NAME_LEN];
-
-
-typedef dn_vector4_t dn_color_t;
-#define dn_rgb_255(red, green, blue) (dn_color_t) { .r = (red) / 255.f, .g = (green) / 255.f, .b = (blue) / 255.f, .a = 1.0 }
-#define dn_rgb_01(red, green, blue) (dn_color_t) { .r = red, .g = green, .b = blue, .a = 1.0 }
-
-typedef struct {
-  dn_color_t indian_red;
-
-  dn_color_t zomp;
-
-  dn_color_t selective_yellow;
-} dn_colors_t;
-
-dn_colors_t dn_colors = (dn_colors_t) {
-  .indian_red =       dn_rgb_255(180, 101, 111),
-  .zomp =             dn_rgb_255(99,  160, 136),
-  .selective_yellow = dn_rgb_255(250, 188, 42),
-};
-
-
-
 
 //  ███╗   ███╗ █████╗  ██████╗██████╗  ██████╗ ███████╗
 //  ████╗ ████║██╔══██╗██╔════╝██╔══██╗██╔═══██╗██╔════╝
@@ -127,6 +75,7 @@ dn_colors_t dn_colors = (dn_colors_t) {
 #define DN_ASSERT(condition) assert(condition)
 #define DN_UNTESTED() DN_ASSERT(false)
 #define DN_UNREACHABLE() DN_ASSERT(false)
+#define DN_UNREACHABLE_MESSAGE(message) DN_ASSERT(false && (message))
 #define DN_BROKEN() DN_ASSERT(false)
 
 #define dn_zero_initialize() { 0 }
@@ -138,13 +87,150 @@ dn_colors_t dn_colors = (dn_colors_t) {
 
 #define DN_FMT_U64 PRIu64
 
-#define dn_lval(type, rvalue) (&(type){ rvalue })
+#define dn_ptr_lval(type, rvalue) (&(type){ rvalue })
+#define dn_arr_lval(type, ...) ((type []){ __VA_ARGS__ })
 
 #define dn_swap(t, a, b) { t dn_unique_name() = (a); (a) = (b); (b) = dn_unique_name(); }
 
 #include "gs.h"
 
 #define gs_hash_table_for(_HT, it) for (gs_hash_table_iter it = 0; gs_hash_table_iter_valid((_HT), it); gs_hash_table_iter_advance((_HT), it))
+
+//  ███╗   ███╗ █████╗ ████████╗██╗  ██╗
+//  ████╗ ████║██╔══██╗╚══██╔══╝██║  ██║
+//  ██╔████╔██║███████║   ██║   ███████║
+//  ██║╚██╔╝██║██╔══██║   ██║   ██╔══██║
+//  ██║ ╚═╝ ██║██║  ██║   ██║   ██║  ██║
+//  ╚═╝     ╚═╝╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝
+
+#ifdef DN_MATH_BACKEND_HANDMADE
+#include "HandmadeMath.h"
+typedef HMM_Vec2 dn_vector2_t;
+typedef HMM_Vec3 dn_vector3_t;
+typedef HMM_Vec4 dn_vector4_t;
+#else 
+typedef union {
+  struct {
+    float x;
+    float y;
+  };
+
+  struct {
+    float r;
+    float g;
+  };
+} dn_vector2_t;
+
+typedef union {
+  struct {
+    float x;
+    float y;
+    float z;
+  };
+
+  struct {
+    float r;
+    float g;
+    float b;
+  };
+} dn_vector3_t;
+
+typedef union {
+  struct {
+    float x;
+    float y;
+    float z;
+    float w;
+  };
+  struct {
+    float r;
+    float g;
+    float b;
+    float a;
+  };
+} dn_vector4_t;
+#endif
+
+typedef struct {
+	i32 x;
+	i32 y;
+} dn_vector2i_t;
+
+
+f32          dn_math_step(f32 edge, f32 x);
+f32          dn_math_lerp(f32 a, f32 b, f32 t);
+dn_vector4_t dn_math_lerp4(dn_vector4_t a, dn_vector4_t b, f32 t);
+dn_vector4_t dn_math_abs4(dn_vector4_t v);
+dn_vector4_t dn_math_fract4(dn_vector4_t v);
+dn_vector4_t dn_math_clamp4(dn_vector4_t v, float minVal, float maxVal);
+
+
+//   ██████╗ ██████╗ ██╗      ██████╗ ██████╗ ███████╗
+//  ██╔════╝██╔═══██╗██║     ██╔═══██╗██╔══██╗██╔════╝
+//  ██║     ██║   ██║██║     ██║   ██║██████╔╝███████╗
+//  ██║     ██║   ██║██║     ██║   ██║██╔══██╗╚════██║
+//  ╚██████╗╚██████╔╝███████╗╚██████╔╝██║  ██║███████║
+//   ╚═════╝ ╚═════╝ ╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝
+typedef dn_vector4_t dn_color_t;
+#define dn_rgb_255(red, green, blue) (dn_color_t) { .r = (red) / 255.f, .g = (green) / 255.f, .b = (blue) / 255.f, .a = 1.0 }
+#define dn_rgb_01(red, green, blue) (dn_color_t) { .r = red, .g = green, .b = blue, .a = 1.0 }
+
+typedef struct {
+  dn_color_t indian_red;
+	dn_color_t tyrian_purple;
+	dn_color_t cardinal;
+  dn_color_t celadon;
+	dn_color_t spring_green;     
+	dn_color_t mindaro;          
+	dn_color_t light_green;      
+  dn_color_t zomp;
+	dn_color_t midnight_green;   
+	dn_color_t prussian_blue;    
+	dn_color_t orange;           
+	dn_color_t sunglow;          
+	dn_color_t selective_yellow; 
+  dn_color_t gunmetal;
+	dn_color_t paynes_gray;
+	dn_color_t cadet_gray;
+	dn_color_t charcoal;
+	dn_color_t cool_gray;
+	dn_color_t cream;            
+	dn_color_t misty_rose;       
+	dn_color_t taupe;            
+	dn_color_t dark_green;       
+	dn_color_t rich_black;       
+	dn_color_t white;
+} dn_colors_t;
+
+dn_colors_t dn_colors = (dn_colors_t) {
+  .indian_red       = dn_rgb_255(180, 101, 111), // RED
+	.tyrian_purple    = dn_rgb_255(95,  26,  55),
+	.cardinal         = dn_rgb_255(194, 37,  50),
+  .celadon          = dn_rgb_255(183, 227, 204), // GREEN
+	.spring_green     = dn_rgb_255(89,  255, 160),
+	.mindaro          = dn_rgb_255(188, 231, 132),
+	.light_green      = dn_rgb_255(161, 239, 139),
+  .zomp             = dn_rgb_255(99,  160, 136), 
+	.midnight_green   = dn_rgb_255(25,  83,  95),
+	.prussian_blue    = dn_rgb_255(16,  43,  63),  // BLUE
+	.orange           = dn_rgb_255(249, 166, 32),  // ORANGE
+	.sunglow          = dn_rgb_255(255, 209, 102), 
+  .selective_yellow = dn_rgb_255(250, 188, 42),  
+  .gunmetal         = dn_rgb_255(43,  61,  65),  // GRAY
+	.paynes_gray      = dn_rgb_255(76,  95,  107),
+	.cadet_gray       = dn_rgb_255(131, 160, 160),
+	.charcoal         = dn_rgb_255(64,  67,  78),
+	.cool_gray        = dn_rgb_255(140, 148, 173),
+	.cream            = dn_rgb_255(245, 255, 198),  // OFF WHITE
+	.misty_rose       = dn_rgb_255(255, 227, 227),
+	.taupe            = dn_rgb_255(68,  53,  39),   // BROWN
+	.dark_green       = dn_rgb_255(4,   27,  21),   // BLACK
+	.rich_black       = dn_rgb_255(4,   10,  15),
+	.white            = dn_rgb_255(255, 255, 255),
+};
+
+dn_color_t dn_color_rgb_to_hsv(dn_color_t color);
+dn_color_t dn_color_hsv_to_rgb(dn_color_t color);
 
 
 //  ███╗   ███╗███████╗███╗   ███╗ ██████╗ ██████╗ ██╗   ██╗
@@ -393,7 +479,8 @@ typedef struct {
 #define dn_dynamic_array(t) dn_dynamic_array_t
 
 DN_API void dn_dynamic_array_init(dn_dynamic_array_t* dynamic_array, u32 element_size, dn_allocator_t* allocator);
-DN_API u8*  dn_dynamic_array_push(dn_dynamic_array_t* dynamic_array, void* data, u32 count);
+DN_API u8*  dn_dynamic_array_push(dn_dynamic_array_t* dynamic_array, void* data);
+DN_API u8*  dn_dynamic_array_push_n(dn_dynamic_array_t* dynamic_array, void* data, u32 count);
 DN_API u8*  dn_dynamic_array_reserve(dn_dynamic_array_t* dynamic_array, u32 count);
 DN_API void dn_dynamic_array_clear(dn_dynamic_array_t* dynamic_array);
 DN_API u32  dn_dynamic_array_byte_size(dn_dynamic_array_t* dynamic_array);
@@ -551,7 +638,7 @@ dn_tests_t dn_tests;
 
 #define dn_test_assert_ex(desc, condition) \
 do { \
-  dn_assertion_t* assertion = (dn_assertion_t*)dn_dynamic_array_push(&dn_tests.context->assertions, dn_lval(dn_assertion_t, dn_zero_initialize()), 1); \
+  dn_assertion_t* assertion = (dn_assertion_t*)dn_dynamic_array_push(&dn_tests.context->assertions, dn_ptr_lval(dn_assertion_t, dn_zero_initialize())); \
   assertion->description = desc; \
   assertion->success = (condition); \
   dn_tests.context->num_assertions++;  \
@@ -578,13 +665,20 @@ void dn_test_end_suite();
 #ifdef DN_NUKLEAR
 typedef struct nk_context nk_context;
 typedef struct nk_color nk_color;
+typedef struct nk_style_item nk_style_item;
+typedef struct nk_style_button nk_style_button;
 
 #define NK_RATIO(...) ((float []){ __VA_ARGS__ })
 
-void nk_dn_string(struct nk_context* nk, dn_string_t str, nk_flags flags);
-void nk_dn_string_colored(struct nk_context* nk, dn_string_t str, nk_flags flags, dn_color_t color);
-void nk_edit_dn_string(struct nk_context* nk, nk_flags flags, dn_string_t* buffer, u32 max_len, nk_plugin_filter filter);
-nk_color dn_color_to_nk_color(dn_color_t color);
+void          nk_dn_string(nk_context* nk, dn_string_t str, nk_flags flags);
+void          nk_dn_string_wrap(nk_context* nk, dn_string_t str);
+void          nk_dn_string_colored(nk_context* nk, dn_string_t str, nk_flags flags, dn_color_t color);
+void          nk_edit_dn_string(nk_context* nk, nk_flags flags, dn_string_t* buffer, u32 max_len, nk_plugin_filter filter);
+bool          nk_selectable_dn_string(nk_context* nk, dn_string_t str, nk_flags flags, nk_bool* value);
+bool          nk_button_dn_string(nk_context* nk, dn_string_t str);
+bool          nk_button_dn_string_styled(nk_context* nk, nk_style_button* style, dn_string_t str);
+nk_color      dn_color_to_nk_color(dn_color_t color);
+nk_style_item dn_color_to_nk_style_item(dn_color_t color);
 #endif
 
 
@@ -596,10 +690,86 @@ nk_color dn_color_to_nk_color(dn_color_t color);
 //  ██║██║ ╚═╝ ██║██║     ███████╗███████╗██║ ╚═╝ ██║███████╗██║ ╚████║   ██║   ██║  ██║   ██║   ██║╚██████╔╝██║ ╚████║
 //  ╚═╝╚═╝     ╚═╝╚═╝     ╚══════╝╚══════╝╚═╝     ╚═╝╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚═╝  ╚═╝   ╚═╝   ╚═╝ ╚═════╝ ╚═╝  ╚═══╝
 #ifdef DN_IMPL
+dn_color_t dn_color_rgb_to_hsv(dn_color_t color) {
+  DN_BROKEN();
+  dn_vector4_t k = (dn_color_t) { (0.0), (-1.0 / 3.0), (2.0 / 3.0), (-1.0) };
+
+  dn_vector4_t pa = (dn_vector4_t) { color.b, color.g, k.w, k.z };
+  dn_vector4_t pb = (dn_vector4_t) { color.g, color.b, k.x, k.y };
+  dn_vector4_t p = dn_math_lerp4(pa, pb, dn_math_step(color.b, color.g));
+
+  dn_vector4_t qa = (dn_vector4_t) { p.x, p.y, p.w, color.r };
+  dn_vector4_t qb = (dn_vector4_t) { color.r, p.y, p.z, p.x };
+  dn_vector4_t q = dn_math_lerp4(qa, qb, dn_math_step(p.x, color.r));
+
+  float d = q.x - dn_min(q.w, q.y);
+  float e = 1.0e-10;
+  return (dn_color_t) {
+    fabs(q.z + (q.w - q.y) / (6.0 * d + e)),
+    d / (q.x + e),
+    q.x,
+    color.a
+  };
+}
+
+dn_color_t dn_color_hsv_to_rgb(dn_color_t color) {
+  DN_BROKEN();
+  dn_vector4_t k = (dn_color_t) { (1.0), (2.0 / 3.0), (1.0 / 3.0), (3.0) };
+  dn_vector4_t p = (dn_color_t) { color.x + k.x, color.x + k.y, color.x + k.z };
+  return color;
+}
+
+f32 dn_math_step(f32 edge, f32 x) {
+    return (x < edge) ? 0.0f : 1.0f;
+}
+
+f32 dn_math_lerp(f32 a, f32 b, f32 t) {
+    return a * (1.0f - t) + b * t;
+}
+
+dn_vector4_t dn_math_lerp4(dn_vector4_t a, dn_vector4_t b, f32 t) {
+  return (dn_vector4_t){
+    .x = dn_math_lerp(a.x, b.x, t),
+    .y = dn_math_lerp(a.y, b.y, t),
+    .z = dn_math_lerp(a.z, b.z, t),
+    .w = dn_math_lerp(a.w, b.w, t),
+  };
+}
+
+dn_vector4_t dn_math_abs4(dn_vector4_t v) {
+    dn_vector4_t result;
+    result.x = fabsf(v.x);
+    result.y = fabsf(v.y);
+    result.z = fabsf(v.z);
+    result.w = fabsf(v.w);
+    return result;
+}
+
+dn_vector4_t dn_math_fract4(dn_vector4_t v) {
+    dn_vector4_t result;
+    result.x = v.x - floorf(v.x);
+    result.y = v.y - floorf(v.y);
+    result.z = v.z - floorf(v.z);
+    result.w = v.w - floorf(v.w);
+    return result;
+}
+
+dn_vector4_t dn_math_clamp4(dn_vector4_t v, float minVal, float maxVal) {
+    dn_vector4_t result;
+    result.x = fmaxf(minVal, fminf(v.x, maxVal));
+    result.y = fmaxf(minVal, fminf(v.y, maxVal));
+    result.z = fmaxf(minVal, fminf(v.z, maxVal));
+    result.w = fmaxf(minVal, fminf(v.w, maxVal));
+    return result;
+}
 
 #ifdef DN_NUKLEAR
 void nk_dn_string(struct nk_context* nk, dn_string_t str, nk_flags flags) {
   nk_text(nk, (char*)str.data, (i32)str.len, flags);
+}
+
+void nk_dn_string_wrap(nk_context* nk, dn_string_t str) {
+  nk_text_wrap(nk, (char*)str.data, (i32)str.len);
 }
 
 void nk_dn_string_colored(struct nk_context* nk, dn_string_t str, nk_flags flags, dn_color_t color) {
@@ -610,9 +780,26 @@ void nk_edit_dn_string(struct nk_context* nk, nk_flags flags, dn_string_t* buffe
   nk_edit_string(nk, flags, (char*)buffer->data, (i32*)&buffer->len, max_len, filter);
 }
 
+bool nk_selectable_dn_string(nk_context* nk, dn_string_t str, nk_flags flags, nk_bool* value) {
+  return nk_selectable_text(nk, (char*)str.data, (i32)str.len, flags, value);
+}
+
+bool nk_button_dn_string(nk_context* nk, dn_string_t str) {
+  return nk_button_text(nk, (char*)str.data, (i32)str.len);
+}
+
+bool nk_button_dn_string_styled(nk_context* nk, nk_style_button* style, dn_string_t str) {
+  return nk_button_text_styled(nk, style, (char*)str.data, (i32)str.len);
+}
+
 nk_color dn_color_to_nk_color(dn_color_t color) {
   return nk_rgba(color.r * 255, color.g * 255, color.b * 255, color.a * 255);
 }
+
+nk_style_item dn_color_to_nk_style_item(dn_color_t color) {
+  return nk_style_item_color(dn_color_to_nk_color(color));
+}
+
 #endif
 
 
@@ -1003,7 +1190,11 @@ u8* dn_dynamic_array_at(dn_dynamic_array_t* buffer, u32 index) {
   return buffer->data + (index * buffer->element_size);
 }
 
-u8* dn_dynamic_array_push(dn_dynamic_array_t* buffer, void* data, u32 count) {
+u8*  dn_dynamic_array_push(dn_dynamic_array_t* dynamic_array, void* data) {
+  return dn_dynamic_array_push_n(dynamic_array, data, 1);
+}
+
+u8* dn_dynamic_array_push_n(dn_dynamic_array_t* buffer, void* data, u32 count) {
   DN_ASSERT(buffer);
 
   void* reserved = dn_dynamic_array_reserve(buffer, count);
@@ -1153,7 +1344,7 @@ void dn_string_copy_to_str(dn_string_t source, dn_string_t* dest, u32 capacity) 
 }
 
 void dn_string_copy_to(dn_string_t str, u8* buffer, u32 capacity) {
-  dn_os_memory_copy(str.data, buffer, dn_min (str.len, capacity));
+  dn_os_memory_copy(str.data, buffer, dn_min(str.len, capacity));
 }
 
 void dn_string_builder_grow(dn_string_builder_t* builder, u32 requested_capacity) {
@@ -1519,9 +1710,9 @@ void dn_gen_arena_test() {
   dn_test_begin(dn_string_literal("dn_gen_arena"));
     dn_pool(u32) arena = dn_zero_initialize();
     dn_pool_init(&arena, 32, sizeof(u32));
-    dn_pool_handle_t rza = dn_pool_insert(&arena, dn_lval(u32, 69));
-    dn_pool_handle_t gza = dn_pool_insert(&arena, dn_lval(u32, 420));
-    dn_pool_handle_t bill = dn_pool_insert(&arena, dn_lval(u32, 7));
+    dn_pool_handle_t rza = dn_pool_insert(&arena, dn_ptr_lval(u32, 69));
+    dn_pool_handle_t gza = dn_pool_insert(&arena, dn_ptr_lval(u32, 420));
+    dn_pool_handle_t bill = dn_pool_insert(&arena, dn_ptr_lval(u32, 7));
     
     dn_test_assert(*dn_pool_at(u32, &arena, rza) == 69);
     dn_test_assert(*dn_pool_at(u32, &arena, gza) == 420);
@@ -1529,7 +1720,7 @@ void dn_gen_arena_test() {
 
     dn_pool_remove(&arena, bill);
 
-    dn_pool_handle_t murray = dn_pool_insert(&arena, dn_lval(u32, 9001));
+    dn_pool_handle_t murray = dn_pool_insert(&arena, dn_ptr_lval(u32, 9001));
     dn_test_assert(!dn_pool_contains(&arena, bill));
     dn_test_assert(dn_pool_contains(&arena, murray));
     dn_test_assert(*dn_pool_at(u32, &arena, murray) == 9001);
@@ -1663,10 +1854,27 @@ void dn_string_builder_test() {
   dn_test_end_suite();
 }
 
+void dn_color_test() {
+  dn_test_suite_t suite = {
+    .name = dn_string_literal("dn_color_t"),
+  };
+  dn_test_begin_suite(&suite);
+
+  dn_test_begin(dn_string_literal("dn_color_rgb_to_hsv")); {
+    dn_color_t rgb = dn_rgb_255(244, 211, 94);
+    dn_color_t hsv = dn_color_rgb_to_hsv(rgb);
+    dn_color_t hsv_expected = dn_rgb_255(47, 61, 96);
+    dn_test_assert(dn_os_is_memory_equal(&hsv, &hsv_expected, sizeof(dn_color_t)));
+  }
+  dn_test_end();
+
+  dn_test_end_suite();
+}
 void dn_test_run_internal() {
   dn_string_test();
   dn_string_builder_test();
   dn_gen_arena_test();
+  // dn_color_test();
 }
 
 void dn_init() {

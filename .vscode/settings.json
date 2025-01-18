@@ -25,6 +25,7 @@
     "utility": "c",
     "xtree": "c",
     "xutility": "c",
-    "network.h": "c"
+    "network.h": "c",
+    "sokol_imgui.h": "c"
   }
 }

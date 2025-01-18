@@ -2,6 +2,7 @@
 #include "emscripten/websocket.h"
 #include "emscripten/trace.h"
 
+
 #define NK_INCLUDE_FIXED_TYPES
 #define NK_INCLUDE_STANDARD_IO
 #define NK_INCLUDE_DEFAULT_ALLOCATOR
@@ -10,9 +11,6 @@
 #define NK_INCLUDE_DEFAULT_FONT
 #define NK_INCLUDE_STANDARD_VARARGS
 
-// #define NK_INCLUDE_STANDARD_BOOL
-// #define NK_INCLUDE_COMMAND_USERDATA
-// #define NK_UINT_DRAW_INDEX
 #define NK_IMPLEMENTATION
 #include "nuklear.h"
 #include "nuklear_demo.h"
@@ -31,10 +29,10 @@
 
 #include "sp.h"
 
-#include "app.h"
+#include "client.h"
 
 #define SP_CLIENT_APP_IMPL
-#include "app.h"
+#include "client.h"
 #define SP_IMPL
 #include "sp.h"
 

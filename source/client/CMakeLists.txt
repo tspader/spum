@@ -24,8 +24,8 @@ target_include_directories(spumc PRIVATE
     ${SP_INCLUDE_DIR}/gunslinger
     ${SP_INCLUDE_DIR}/handmade
     ${SP_INCLUDE_DIR}/Nuklear
+    ${SP_INCLUDE_DIR}/cimgui
 )
-
 
 target_compile_definitions(spumc PRIVATE SOKOL_GLES3=1)
 
