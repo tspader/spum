@@ -1,6 +1,5 @@
 /*
   Render the opponent's stuff on the sidebar (active, bench, discard, deck, hand, unknown)
-  Format log messages with the player's name, and add a color for each player
   Change the default clear color
   Figure out how to render the lines of text without making every line double height
   Clicking active/bench should select
@@ -15,6 +14,7 @@
   Put stuff in the bench slots
   Render the opponent's stuff in the playmat
   Format opponent log messages differently
+  Format log messages with the player's name, and add a color for each player
 
 */
 #ifndef SP_CLIENT_APP_H
@@ -50,13 +50,23 @@ typedef struct {
   sp_deck_t deck;
   dn_string_t password;
   sp_client_search_state_t search;
-  sp_match_data_t data;
+  sp_match_t data;
   sp_match_player_id_t id;
 } sp_client_match_t;
 
 typedef struct {
   sp_card_location_t selected_card;
   sp_match_action_t selected_action;
+
+  struct {
+    struct {
+      dn_color_t active;
+      dn_color_t bench;
+      dn_color_t hand;
+      dn_color_t discard;
+      dn_color_t deck;
+    } sidebar;
+  } colors;
 } sp_client_ui_state_t;
 
 typedef struct {
@@ -91,36 +101,39 @@ typedef struct {
 } sp_client_t;
 sp_client_t sp_client;
 
-void         sp_client_init();
-void         sp_client_update();
-void         sp_client_render();
-void         sp_client_shutdown();
-void         sp_client_update_state();
-void         sp_client_process_match_event(sp_net_match_event_t* event);
-void         sp_client_process_match_action_event(sp_net_match_action_event_t* event);
-void         sp_client_draw_match();
-void         sp_client_draw_field_card(sp_field_card_t* card);
-dn_string_t  sp_client_generate_username();
-sp_player_t* sp_client_get_player();
-sp_player_t* sp_client_get_opponent();
-bool         sp_client_is_selected(sp_card_location_t location);
-void         sp_client_select(sp_card_location_t location);
-dn_string_t  sp_client_field_card_label(sp_field_card_t* field_card);
-dn_string_t  sp_client_energy_to_short_id(sp_pokemon_type_t energy);
-dn_string_t  sp_client_build_action_description(sp_match_action_t* action);
-dn_string_t  sp_client_build_action_result_description(dn_string_t username, sp_match_action_t* action, sp_match_action_result_t* result);
-bool         sp_client_on_websocket_open(int event_type, const EmscriptenWebSocketOpenEvent* event, void* user_data);
-bool         sp_client_on_websocket_error(int event_type, const EmscriptenWebSocketErrorEvent* event, void* user_data);
-bool         sp_client_on_websocket_close(int event_type, const EmscriptenWebSocketCloseEvent* event, void* user_data);
-bool         sp_client_on_websocket_message(int event_type, const EmscriptenWebSocketMessageEvent* event, void* user_data);
-void         sp_client_process_response(sp_net_response_t* response);
-void         sp_client_process_match_event(sp_net_match_event_t* event);
-void         sp_client_submit_request(sp_net_request_t* request);
-dn_string_t  sp_client_state_to_string(sp_client_state_t state);
-dn_string_t  sp_client_search_state_to_string(sp_client_search_state_t state);
-void         sp_client_log_init(sp_client_log_t* log);
-void         sp_client_log_push(sp_client_log_t* log, dn_string_t str);
-void         sp_client_log_push_colored(sp_client_log_t* log, dn_string_t str, dn_color_t color);
+void                 sp_client_init();
+void                 sp_client_update();
+void                 sp_client_render();
+void                 sp_client_shutdown();
+void                 sp_client_update_state();
+void                 sp_client_process_match_event(sp_net_match_event_t* event);
+void                 sp_client_process_match_action_event(sp_net_match_action_event_t* event);
+void                 sp_client_draw_match();
+bool                 sp_client_draw_sidebar_card(sp_card_location_t location);
+bool                 sp_client_draw_field_card(sp_card_location_t location);
+dn_string_t          sp_client_generate_username();
+sp_player_t*         sp_client_get_player();
+sp_player_t*         sp_client_get_opponent();
+sp_match_player_id_t sp_client_get_player_id();
+sp_match_player_id_t sp_client_get_opponent_id();
+bool                 sp_client_is_selected(sp_card_location_t location);
+void                 sp_client_select(sp_card_location_t location);
+dn_string_t          sp_client_field_card_label(sp_field_card_t* field_card);
+dn_string_t          sp_client_energy_to_short_id(sp_pokemon_type_t energy);
+dn_string_t          sp_client_build_action_description(sp_match_action_t* action);
+dn_string_t          sp_client_build_action_result_description(dn_string_t username, sp_match_action_t* action, sp_match_action_result_t* result);
+bool                 sp_client_on_websocket_open(int event_type, const EmscriptenWebSocketOpenEvent* event, void* user_data);
+bool                 sp_client_on_websocket_error(int event_type, const EmscriptenWebSocketErrorEvent* event, void* user_data);
+bool                 sp_client_on_websocket_close(int event_type, const EmscriptenWebSocketCloseEvent* event, void* user_data);
+bool                 sp_client_on_websocket_message(int event_type, const EmscriptenWebSocketMessageEvent* event, void* user_data);
+void                 sp_client_process_response(sp_net_response_t* response);
+void                 sp_client_process_match_event(sp_net_match_event_t* event);
+void                 sp_client_submit_request(sp_net_request_t* request);
+dn_string_t          sp_client_state_to_string(sp_client_state_t state);
+dn_string_t          sp_client_search_state_to_string(sp_client_search_state_t state);
+void                 sp_client_log_init(sp_client_log_t* log);
+void                 sp_client_log_push(sp_client_log_t* log, dn_string_t str);
+void                 sp_client_log_push_colored(sp_client_log_t* log, dn_string_t str, dn_color_t color);
 #endif
 
 
@@ -171,8 +184,6 @@ void sp_client_init() {
   nk_context* nk = sp_client.nk;
 
   // Data  
-  sp_client.match.password = dn_string_alloc(SP_MAX_PASSWORD_LEN, &dn_allocators.standard.allocator);
-
   sp_client.usernames.player = dn_string_alloc(SP_MAX_USERNAME_LEN, &dn_allocators.standard.allocator);
   dn_string_copy_to_str(sp_client_generate_username(), &sp_client.usernames.player, SP_MAX_USERNAME_LEN);
 
@@ -183,7 +194,25 @@ void sp_client_init() {
 
   sp_client_log_init(&sp_client.log);
 
-  sp_client.match.data = sp_sample_match;
+	sp_client.match = (sp_client_match_t) {
+		.deck = sp_client.deck,
+		.data = sp_sample_match,
+		.id = SP_PLAYER_ID_0,
+    .password = dn_string_alloc(SP_MAX_PASSWORD_LEN, &dn_allocators.standard.allocator)
+	};
+  sp_match_init(&sp_client.match.data, dn_arr_lval(sp_deck_t, sp_client.deck, sp_deck_gen_random()));
+
+  sp_client.ui = (sp_client_ui_state_t) {
+    .colors = {
+      .sidebar = {
+        .active = dn_colors.white,
+        .bench = dn_colors.cool_gray,
+        .hand = dn_colors.zomp,
+        .discard = dn_colors.indian_red,
+        .deck = dn_colors.selective_yellow
+      }
+    }
+  };
 }
 
 void sp_client_update() {
@@ -219,22 +248,22 @@ void sp_client_update() {
       nk_dn_string(nk, dn_string_literal("Set Number"), NK_TEXT_LEFT);
 
       sp_deck_count_t count = sp_deck_count(&sp_client.deck);
+      dn_for(index, SP_DECK_SIZE) {
+        sp_deck_count_item_t* item = &count.cards[index];
+        sp_card_t* card = &sp_cards[item->card];
 
-      gs_hash_table_for(count.cards, it) {
-        sp_card_id_t card_id = gs_hash_table_iter_getk(count.cards, it);
-        u32 num_instances = gs_hash_table_iter_get(count.cards, it);
-        sp_card_t card = sp_cards[card_id];
+        if (!item->count) break;
 
-        nk_labelf(nk, NK_TEXT_LEFT, "(%d)", num_instances);
-        nk_dn_string(nk, card.pokemon.name, NK_TEXT_LEFT);
-        nk_dn_string(nk, sp_card_set_to_short_string(card.set), NK_TEXT_LEFT);
-        nk_labelf(nk, NK_TEXT_LEFT, "%d", card.set_id);
+        nk_labelf(nk, NK_TEXT_LEFT, "(%d)", item->count);
+        nk_dn_string(nk, card->pokemon.name, NK_TEXT_LEFT);
+        nk_dn_string(nk, sp_card_set_to_short_string(card->set), NK_TEXT_LEFT);
+        nk_labelf(nk, NK_TEXT_LEFT, "%d", card->set_id);
       }
 
       nk_tree_pop(nk);
     }
 
-    if (nk_tree_push(nk, NK_TREE_TAB, "Find a Match", NK_MINIMIZED)) {
+    if (nk_tree_push(nk, NK_TREE_TAB, "Find a Match", NK_MAXIMIZED)) {
       nk_layout_row(nk, NK_STATIC, 30, 3, NK_RATIO(150, 100, 100));
 
       nk_edit_dn_string(nk, NK_EDIT_SIMPLE, &sp_client.match.password, SP_MAX_PASSWORD_LEN, nk_filter_default);
@@ -280,6 +309,10 @@ dn_string_t sp_client_energy_to_short_id(sp_pokemon_type_t energy) {
 }
 
 dn_string_t sp_client_field_card_label(sp_field_card_t* field_card) {
+  if (field_card->card == SP_CARD_NONE) {
+    return dn_string_literal("(Empty)"); 
+  }
+
   sp_card_t* card = sp_find_card(field_card->card);
 
   dn_string_builder_t builder = dn_tstring_builder();
@@ -298,6 +331,89 @@ dn_string_t sp_client_field_card_label(sp_field_card_t* field_card) {
   dn_string_builder_append(&builder, dn_string_literal("]"));
 
   return dn_string_builder_write(&builder);
+}
+
+bool sp_client_draw_sidebar_card(sp_card_location_t location) {
+  nk_context* nk = sp_client.nk;
+
+  sp_card_id_t card_id = sp_match_find_card(&sp_client.match.data, location);
+  sp_card_t* card = sp_find_card(card_id);
+  if (card_id == SP_CARD_NONE) { 
+    return false;
+  }
+
+  dn_color_t color;
+  switch (location.pile) {
+    case SP_CARD_PILE_ACTIVE:  color = sp_client.ui.colors.sidebar.active; break;
+    case SP_CARD_PILE_BENCH:   color = sp_client.ui.colors.sidebar.bench; break;
+    case SP_CARD_PILE_HAND:    color = sp_client.ui.colors.sidebar.hand; break;
+    case SP_CARD_PILE_DISCARD: color = sp_client.ui.colors.sidebar.discard; break;
+    case SP_CARD_PILE_DECK:    color = sp_client.ui.colors.sidebar.deck; break;
+    default: DN_UNREACHABLE();
+  }
+
+  nk_style_push_color(nk, &nk->style.selectable.text_normal, dn_color_to_nk_color(color));
+
+
+  nk_bool is_card_selected = sp_client_is_selected(location);
+
+  bool pressed = nk_selectable_dn_string(nk, card->pokemon.name, NK_TEXT_LEFT, &is_card_selected);
+  if (pressed) {
+    sp_client_select(location);
+  }
+
+  nk_style_pop_color(nk);
+
+  return pressed;
+}
+
+bool sp_client_draw_field_card(sp_card_location_t location) {
+  nk_context* nk = sp_client.nk;
+
+  bool is_slot_occupied = sp_player_is_location_occupied(sp_match_find_player(&sp_client.match.data, location.player), location);
+  if (!is_slot_occupied) {
+    nk_button_dn_string(nk, dn_string_literal("(Empty)"));
+    return false;
+  }
+
+  bool is_card_selected = sp_client_is_selected(location);
+  if (is_card_selected) nk_style_push_style_item(nk, &nk->style.button.normal, nk->style.button.active);
+
+  sp_field_card_t* field_card = sp_match_find_field_card(&sp_client.match.data, location);
+  bool pressed = nk_button_dn_string(nk, sp_client_field_card_label(field_card));
+
+  if (is_card_selected) nk_style_pop_style_item(nk);
+
+  if (pressed) {
+    sp_client_select(location);
+  }
+
+  return pressed;
+}
+
+bool sp_client_draw_hand_card(sp_card_location_t location) {
+  nk_context* nk = sp_client.nk;
+
+  sp_card_id_t card = sp_match_find_card(&sp_client.match.data, location);
+  bool is_slot_occupied = sp_player_is_location_occupied(sp_match_find_player(&sp_client.match.data, location.player), location);
+  if (!is_slot_occupied) {
+    nk_button_dn_string(nk, dn_string_literal("(Empty)"));
+    return false;
+  }
+
+  bool is_card_selected = sp_client_is_selected(location);
+  if (is_card_selected) nk_style_push_style_item(nk, &nk->style.button.normal, nk->style.button.active);
+
+  dn_string_t label = card == SP_CARD_NONE ? dn_string_literal("(Empty)") : sp_find_card(card)->pokemon.name;
+  bool pressed = nk_button_dn_string(nk, label);
+
+  if (is_card_selected) nk_style_pop_style_item(nk);
+
+  if (pressed) {
+    sp_client_select(location);
+  }
+
+  return pressed;
 }
 
 void sp_client_update_state() {
@@ -385,11 +501,14 @@ void sp_client_draw_match() {
     if (nk_group_begin(nk, "sp_group:deck", NK_WINDOW_NO_SCROLLBAR)) {
       sp_deck_count_t count = sp_deck_count(&player->deck_list);
 
-      if (nk_tree_push(nk, NK_TREE_TAB, "Active", NK_MAXIMIZED)) {
+      if (nk_tree_push(nk, NK_TREE_TAB, "Active", NK_MINIMIZED)) {
         if (player->active.card != SP_CARD_NONE) {
           nk_layout_row_static(nk, 12, 100, 1);
-          sp_card_t* card = &sp_cards[player->active.card];
-          nk_dn_string(nk, card->pokemon.name, NK_TEXT_LEFT);
+
+          sp_client_draw_sidebar_card((sp_card_location_t) {
+            .player = sp_client_get_player_id(),
+            .pile = SP_CARD_PILE_ACTIVE,
+          });
         }
 
         nk_tree_pop(nk);
@@ -397,13 +516,15 @@ void sp_client_draw_match() {
       sp_deck_count_remove_active_cards(&count, &player->active, 1);
 
 
-      if (nk_tree_push(nk, NK_TREE_TAB, "Bench", NK_MAXIMIZED)) {
+      if (nk_tree_push(nk, NK_TREE_TAB, "Bench", NK_MINIMIZED)) {
         nk_layout_row_static(nk, 12, 100, 1);
-        dn_for(index, 3) {
-          sp_field_card_t* pokemon = &player->bench[index];
-          sp_card_id_t id = pokemon->card;
-          sp_card_t* card = &sp_cards[id];
-          nk_dn_string_colored(nk, card->pokemon.name, NK_TEXT_LEFT, dn_colors.cool_gray);
+
+        dn_for(slot, 3) {
+          sp_client_draw_sidebar_card((sp_card_location_t) {
+            .player = sp_client_get_player_id(),
+            .pile = SP_CARD_PILE_BENCH,
+            .slot = slot
+          });
         }
 
         nk_tree_pop(nk);
@@ -416,14 +537,11 @@ void sp_client_draw_match() {
         nk_style_push_color(nk, &nk->style.selectable.text_normal, dn_color_to_nk_color(dn_colors.zomp));
         
         sp_for_card(it, player->hand) {
-          sp_card_id_t* id = sp_card_iter_get_ptr(&it);
-          sp_card_t* card = &sp_cards[*id];
-          sp_card_location_t location = { .pile = SP_CARD_PILE_HAND, .slot = it.index };
-          nk_bool selected = sp_client_is_selected(location);
-
-          if (nk_selectable_dn_string(nk, card->pokemon.name, NK_TEXT_LEFT, &selected)) {
-            sp_client_select(location);
-          }
+          sp_client_draw_sidebar_card((sp_card_location_t) {
+            .player = sp_client_get_player_id(),
+            .pile = SP_CARD_PILE_HAND,
+            .slot = it.index
+          });
         }
 
         nk_style_pop_color(nk);
@@ -435,9 +553,11 @@ void sp_client_draw_match() {
       if (nk_tree_push(nk, NK_TREE_TAB, "Discard", NK_MINIMIZED)) {
         nk_layout_row_static(nk, 12, 100, 1);
         sp_for_card(it, player->discard) {
-          sp_card_id_t id = sp_card_iter_get(&it);
-          sp_card_t* card = &sp_cards[id];
-          nk_dn_string_colored(nk, card->pokemon.name, NK_TEXT_LEFT, dn_colors.indian_red);
+          sp_client_draw_sidebar_card((sp_card_location_t) {
+            .player = sp_client_get_player_id(),
+            .pile = SP_CARD_PILE_DISCARD,
+            .slot = it.index
+          });
         }
 
         nk_tree_pop(nk);
@@ -446,14 +566,14 @@ void sp_client_draw_match() {
 
       if (nk_tree_push(nk, NK_TREE_TAB, "Deck", NK_MINIMIZED)) {
         nk_layout_row_static(nk, 12, 100, 1);
-        gs_hash_table_for(count.cards, it) {
-          sp_card_id_t card_id = gs_hash_table_iter_getk(count.cards, it);
-          u32 num_instances = gs_hash_table_iter_get(count.cards, it);
-          sp_card_t* card = &sp_cards[card_id];
 
-          dn_for(i, num_instances) {
+        dn_for(index, SP_DECK_SIZE) {
+          sp_deck_count_item_t* item = &count.cards[index];
+          sp_card_t* card = &sp_cards[item->card];
+
+          dn_for(index, item->count) {
             nk_dn_string_colored(nk, card->pokemon.name, NK_TEXT_LEFT, dn_colors.selective_yellow);
-          }
+          }        
         }
 
         nk_tree_pop(nk);
@@ -468,27 +588,41 @@ void sp_client_draw_match() {
       if (nk_group_begin(nk, "sp_group:play:opponent_bench", NK_WINDOW_NO_SCROLLBAR)) {
         nk_layout_row_dynamic(nk, sp_client.nkbs.card_size.y, 3);
         dn_for(slot, SP_BENCH_SIZE) {
-          nk_button_dn_string(nk, sp_client_field_card_label(&opponent->bench[slot]));
+          sp_client_draw_field_card((sp_card_location_t) { 
+            .pile = SP_CARD_PILE_BENCH, 
+            .slot = slot,
+            .player = sp_client_get_opponent_id() 
+          });
         }
         nk_group_end(nk);
       }
 
       if (nk_group_begin(nk, "sp_group:play:opponent_active", NK_WINDOW_NO_SCROLLBAR)) {
         nk_layout_row_dynamic(nk, sp_client.nkbs.card_size.y, 1);
-        nk_button_dn_string(nk, sp_client_field_card_label(&opponent->active));
+        sp_client_draw_field_card((sp_card_location_t) { 
+          .pile = SP_CARD_PILE_ACTIVE, 
+          .player = sp_client_get_opponent_id() 
+        });
         nk_group_end(nk);
       }
 
       if (nk_group_begin(nk, "sp_group:play:active", NK_WINDOW_NO_SCROLLBAR)) {
         nk_layout_row_dynamic(nk, sp_client.nkbs.card_size.y, 1);
-        nk_button_dn_string(nk, sp_client_field_card_label(&player->active));
+        sp_client_draw_field_card((sp_card_location_t) { 
+          .pile = SP_CARD_PILE_ACTIVE, 
+          .player = sp_client_get_player_id() 
+        });
         nk_group_end(nk);
       }
 
       if (nk_group_begin(nk, "sp_group:play:bench", NK_WINDOW_NO_SCROLLBAR)) {
         nk_layout_row_dynamic(nk, sp_client.nkbs.card_size.y, 3);
         dn_for(slot, SP_BENCH_SIZE) {
-          nk_button_dn_string(nk, sp_client_field_card_label(&player->bench[slot]));
+          sp_client_draw_field_card((sp_card_location_t) { 
+            .pile = SP_CARD_PILE_BENCH, 
+            .slot = slot,
+            .player = sp_client_get_player_id() 
+          });
         }
         nk_group_end(nk);
       }
@@ -517,23 +651,13 @@ void sp_client_draw_match() {
     nk_layout_row(nk, NK_DYNAMIC, hand_height, 1, dn_arr_lval(f32, 1.0));
     if (nk_group_begin(nk, "sp_group:hand", NK_WINDOW_NO_SCROLLBAR)) {
       nk_layout_row_dynamic(nk, sp_client.nkbs.card_size.y, 5);
-      dn_for(index, SP_HAND_SIZE) {
-        sp_card_id_t* card_id = &player->hand[index];
-        sp_card_t* card = &sp_cards[*card_id];
-        sp_card_location_t location = { .pile = SP_CARD_PILE_HAND, .slot = index };
-        bool selected = sp_client_is_selected(location);
 
-        if (selected) {
-          nk_style_push_style_item(nk, &nk->style.button.normal, nk->style.button.active);
-        }
-
-        if (nk_button_dn_string(nk, card->pokemon.name)) {
-          sp_client_select(location);
-        }
-
-        if (selected) {
-          nk_style_pop_style_item(nk);
-        }
+      dn_for(slot, SP_HAND_SIZE) {
+        sp_client_draw_hand_card((sp_card_location_t) { 
+          .pile = SP_CARD_PILE_HAND, 
+          .slot = slot,
+          .player = sp_client.match.id
+        });
       }
 
       nk_group_end(nk);
@@ -747,19 +871,32 @@ void sp_client_process_response(sp_net_response_t* response) {
 
 sp_player_t* sp_client_get_player() {
   switch (sp_client.match.id) {
-    case SP_PLAYER_ID_0: return &sp_client.match.data.players[0];
-    case SP_PLAYER_ID_1: return &sp_client.match.data.players[1];
-    default:       DN_UNREACHABLE(); return NULL;
+    case SP_PLAYER_ID_0:       return &sp_client.match.data.players[0];
+    case SP_PLAYER_ID_1:       return &sp_client.match.data.players[1];
+    default: DN_UNREACHABLE(); return NULL;
   }
 }
 
 sp_player_t* sp_client_get_opponent() {
   switch (sp_client.match.id) {
-    case SP_PLAYER_ID_0: return &sp_client.match.data.players[1];
-    case SP_PLAYER_ID_1: return &sp_client.match.data.players[0];
-    default:       DN_UNREACHABLE(); return NULL;
+    case SP_PLAYER_ID_0:       return &sp_client.match.data.players[1];
+    case SP_PLAYER_ID_1:       return &sp_client.match.data.players[0];
+    default: DN_UNREACHABLE(); return NULL;
   }
 }
+
+sp_match_player_id_t sp_client_get_player_id() {
+  return sp_client.match.id;
+}
+
+sp_match_player_id_t sp_client_get_opponent_id() {
+  switch (sp_client.match.id) {
+    case SP_PLAYER_ID_0:       return SP_PLAYER_ID_1;
+    case SP_PLAYER_ID_1:       return SP_PLAYER_ID_0;
+    default: DN_UNREACHABLE(); return SP_PLAYER_ID_NONE;
+  }
+}
+
 
 bool sp_client_is_selected(sp_card_location_t location) {
   return dn_os_is_memory_equal(&location, &sp_client.ui.selected_card, sizeof(sp_card_location_t));
@@ -858,7 +995,7 @@ dn_string_t sp_client_build_action_result_description(dn_string_t username, sp_m
       switch (data->location.pile) {
         case SP_CARD_PILE_BENCH: {
           dn_string_builder_append_fmt(&builder, 
-            dn_string_literal("Tried to place %.*s in bench slot %d, but it was already occupied"), 
+            dn_string_literal("tried to place %.*s in bench slot %d, but it was already occupied"), 
             card->pokemon.name.len,
             card->pokemon.name.data,
             data->location.slot
@@ -867,7 +1004,7 @@ dn_string_t sp_client_build_action_result_description(dn_string_t username, sp_m
         }
         case SP_CARD_PILE_ACTIVE: {
           dn_string_builder_append_fmt(&builder, 
-            dn_string_literal("Tried to place %.*s in the active slot, but it was already occupied"), 
+            dn_string_literal("tried to place %.*s in the active slot, but it was already occupied"), 
             card->pokemon.name.len,
             card->pokemon.name.data
           );
@@ -887,9 +1024,10 @@ dn_string_t sp_client_build_action_result_description(dn_string_t username, sp_m
       switch (data->location.pile) {
         case SP_CARD_PILE_BENCH: {
           dn_string_builder_append_fmt(&builder, 
-            dn_string_literal("played %.*s to the active slot"), 
+            dn_string_literal("played %.*s to bench slot %d"), 
             card->pokemon.name.len,
-            card->pokemon.name.data
+            card->pokemon.name.data,
+            data->location.slot
           );
           break;
         }
@@ -899,6 +1037,7 @@ dn_string_t sp_client_build_action_result_description(dn_string_t username, sp_m
             card->pokemon.name.len,
             card->pokemon.name.data
           );
+          break;
         }
         default: {
           DN_UNREACHABLE();

@@ -137,11 +137,12 @@ dn_string_t sp_username_nouns [] = {
   dn_string_literal("gorge")
 };
 
-sp_match_data_t sp_sample_match = {
+sp_match_t sp_sample_match = {
  .state = SP_MATCH_STATE_SETUP,
  .order_flip = SP_RNG_FLIP_HEADS,
  .players = {
   {
+		.id = SP_PLAYER_ID_0,
    .active = {
     .card = SP_CARD_BULBASAUR,
     .hp = 30
@@ -161,13 +162,20 @@ sp_match_data_t sp_sample_match = {
      SP_CARD_BULBASAUR 
    },
    .discard = dn_zero_initialize(),
+	 .deck = { 
+			SP_CARD_BULBASAUR, SP_CARD_BULBASAUR, SP_CARD_BULBASAUR, SP_CARD_BULBASAUR, 
+			SP_CARD_IVYSAUR, SP_CARD_IVYSAUR, SP_CARD_IVYSAUR, SP_CARD_IVYSAUR, 
+			SP_CARD_VENUSAUR, SP_CARD_VENUSAUR, SP_CARD_VENUSAUR, SP_CARD_VENUSAUR, 
+			SP_CARD_VENUSAUR_EX, SP_CARD_VENUSAUR_EX, SP_CARD_VENUSAUR_EX,  
+		},
    .energy = { 
      SP_POKEMON_TYPE_GRASS, 
      SP_POKEMON_TYPE_GRASS 
    },
   },
   {
-   .active = {
+		.id = SP_PLAYER_ID_1,
+	.active = {
     .card = SP_CARD_WEEDLE,
     .hp = 50,
     .energy = { SP_POKEMON_TYPE_FIRE, SP_POKEMON_TYPE_GRASS }
@@ -187,6 +195,12 @@ sp_match_data_t sp_sample_match = {
      SP_CARD_ODDISH 
    },
    .discard = dn_zero_initialize(),
+		.deck = { 
+			SP_CARD_BULBASAUR, SP_CARD_BULBASAUR, SP_CARD_BULBASAUR, SP_CARD_BULBASAUR, 
+			SP_CARD_IVYSAUR, SP_CARD_IVYSAUR, SP_CARD_IVYSAUR, SP_CARD_IVYSAUR, 
+			SP_CARD_VENUSAUR, SP_CARD_VENUSAUR, SP_CARD_VENUSAUR, SP_CARD_VENUSAUR, 
+			SP_CARD_VENUSAUR_EX, SP_CARD_VENUSAUR_EX, SP_CARD_VENUSAUR_EX,  
+		},
    .energy = { 
      SP_POKEMON_TYPE_FIRE, 
      SP_POKEMON_TYPE_FIRE 
@@ -280,7 +294,7 @@ void sp_test() {
 
 
  dn_test_begin(dn_string_literal("sp_match_init")); {
-  sp_match_data_t match = dn_zero_struct(sp_match_data_t);
+  sp_match_t match = dn_zero_struct(sp_match_t);
   sp_match_init(&match, (sp_deck_t [2]) { sp_deck_gen_random(), sp_deck_gen_random() });
 
   dn_for(i, 2) {

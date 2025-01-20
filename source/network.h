@@ -88,7 +88,7 @@ typedef struct {
 
  union {
   sp_net_match_found_opponent_event_t found;
-  sp_match_data_t state;
+  sp_match_t state;
   sp_net_match_action_event_t action;
  };
 } sp_net_match_event_t;

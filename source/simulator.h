@@ -112,7 +112,12 @@ typedef struct {
 } sp_deck_t;
 
 typedef struct {
-  gs_hash_table(sp_card_id_t, u32) cards;
+  sp_card_id_t card;
+  u32 count;
+} sp_deck_count_item_t;
+
+typedef struct {
+  sp_deck_count_item_t cards [SP_DECK_SIZE];
 } sp_deck_count_t;
 
 
@@ -140,6 +145,7 @@ typedef enum {
 } sp_card_pile_t;
 
 typedef enum {
+  SP_PLAYER_ID_NONE,
   SP_PLAYER_ID_0,
   SP_PLAYER_ID_1,
 } sp_match_player_id_t;
@@ -160,6 +166,7 @@ typedef struct {
 typedef struct {
   sp_card_pile_t pile;
   u32 slot;
+  sp_match_player_id_t player;
 } sp_card_location_t;
 
 typedef struct {
@@ -180,7 +187,7 @@ typedef struct {
   sp_match_state_t state;
   sp_rng_flip_t order_flip;
   sp_player_t players [2];
-} sp_match_data_t;
+} sp_match_t;
 
 typedef struct {
   sp_card_id_t* cards;
@@ -237,13 +244,15 @@ u32                                 sp_rng_ranged_u32(u32 inclusive_min, u32 inc
 sp_rng_flip_t                       sp_rng_flip();
 u32                                 sp_rng_pick_from_set(u32* options, u32 num_options);
                 
-void                                sp_match_init(sp_match_data_t* match, sp_deck_t decks [2]);
-void                                sp_match_update(sp_match_data_t* match);
-bool                                sp_match_is_player_first(sp_match_data_t* match, sp_player_t* player);
-sp_turn_order_t                     sp_match_turn_order(sp_match_data_t* match, sp_player_t* player);
-dn_dynamic_array(sp_match_action_t) sp_match_calc_actions(sp_match_data_t* match, sp_player_t* player, sp_card_location_t location);
-sp_match_action_result_t            sp_match_process_action(sp_match_data_t* match, sp_player_t* player, sp_match_action_t* action);
-sp_player_t*                        sp_match_find_player(sp_match_data_t* match, sp_match_player_id_t id);
+void                                sp_match_init(sp_match_t* match, sp_deck_t decks [2]);
+void                                sp_match_update(sp_match_t* match);
+bool                                sp_match_is_player_first(sp_match_t* match, sp_player_t* player);
+sp_turn_order_t                     sp_match_turn_order(sp_match_t* match, sp_player_t* player);
+dn_dynamic_array(sp_match_action_t) sp_match_calc_actions(sp_match_t* match, sp_player_t* player, sp_card_location_t location);
+sp_match_action_result_t            sp_match_process_action(sp_match_t* match, sp_player_t* player, sp_match_action_t* action);
+sp_player_t*                        sp_match_find_player(sp_match_t* match, sp_match_player_id_t id);
+sp_field_card_t*                    sp_match_find_field_card(sp_match_t* match, sp_card_location_t location);
+sp_card_id_t                        sp_match_find_card(sp_match_t* match, sp_card_location_t location);
 
 void                                sp_player_init(sp_player_t* player, sp_deck_t* deck);
 void                                sp_player_shuffle(sp_player_t* player);
@@ -263,6 +272,9 @@ void                                sp_player_remove_from_hand(sp_player_t* play
 void                                sp_player_play_card_to_field(sp_player_t* player, sp_card_id_t card, sp_card_location_t slot);
               
 sp_deck_count_t                     sp_deck_count(sp_deck_t* deck);
+sp_deck_count_item_t*               sp_deck_count_add(sp_deck_count_t* count, sp_card_id_t card);
+sp_deck_count_item_t*               sp_deck_count_find_item(sp_deck_count_t* count, sp_card_id_t card);
+u32                                 sp_deck_count_find(sp_deck_count_t* count, sp_card_id_t card);
 void                                sp_deck_count_remove_cards(sp_deck_count_t* count, sp_card_id_t* cards, u32 num_cards);
 void                                sp_deck_count_remove_active_cards(sp_deck_count_t* count, sp_field_card_t* cards, u32 num_cards);
 void                                sp_deck_print(sp_deck_t* deck);
@@ -425,23 +437,53 @@ sp_card_id_t* sp_card_iter_get_ptr(sp_card_iter_t* it) {
 /////////////
 sp_deck_count_t sp_deck_count(sp_deck_t* deck) {
   sp_deck_count_t count = dn_zero_initialize();
-
-  dn_for(i, 20) {
-    sp_card_id_t card = deck->cards[i];
-    if (!gs_hash_table_exists(count.cards, card)) {
-      gs_hash_table_insert(count.cards, card, 0);
-    }
-    (*gs_hash_table_getp(count.cards, card))++;
+  dn_for(index, 20) {
+    sp_deck_count_add(&count, deck->cards[index]);
   }
 
   return count;
 }
 
-void sp_deck_count_remove_card(sp_deck_count_t* count, sp_card_id_t card) {
-  if (!gs_hash_table_key_exists(count->cards, card)) return;
+sp_deck_count_item_t* sp_deck_count_add(sp_deck_count_t* count, sp_card_id_t card) {
+  dn_for(index, SP_DECK_SIZE) {
+    sp_deck_count_item_t* item = &count->cards[index];
+    
+    if (item->card == SP_CARD_NONE) {
+      item->card = card;
+    }
 
-  u32* num_instances = gs_hash_table_getp(count->cards, card);
-  *num_instances -= 1;
+    if (item->card == card) {
+      item->count++;
+      return item;
+    }
+  }
+
+  DN_ASSERT(!"sp_deck_count_add: tried to add a card, but the count was full");
+  return NULL;
+}
+
+sp_deck_count_item_t* sp_deck_count_find_item(sp_deck_count_t* count, sp_card_id_t card) {
+  dn_for(index, SP_DECK_SIZE) {
+    sp_deck_count_item_t* item = &count->cards[index];
+    if (item->card == card) {
+      return item;
+    }
+  }
+
+  return NULL;
+}
+
+u32 sp_deck_count_find(sp_deck_count_t* count, sp_card_id_t card) {
+  sp_deck_count_item_t* item = sp_deck_count_find_item(count, card);
+  return item ? item->count : 0;
+}
+
+void sp_deck_count_remove_card(sp_deck_count_t* count, sp_card_id_t card) {
+  sp_deck_count_item_t* item = sp_deck_count_find_item(count, card);
+  if (!item) return;
+  if (!item->count) return;
+
+  item->count--;
 }
 
 void sp_deck_count_remove_cards(sp_deck_count_t* count, sp_card_id_t* cards, u32 num_cards) {
@@ -466,13 +508,12 @@ void sp_deck_print_ordered(sp_deck_t* deck) {
 void sp_deck_print(sp_deck_t* deck) {
   sp_deck_count_t count = sp_deck_count(deck);
 
-  gs_hash_table_for(count.cards, it) {
-    sp_card_id_t card_id = gs_hash_table_iter_getk(count.cards, it);
-    u32 num_instances = gs_hash_table_iter_get(count.cards, it);
-    sp_card_t card = sp_cards[card_id];
+  dn_for(index, SP_DECK_SIZE) {
+    sp_deck_count_item_t* item = &count.cards[index];
+    sp_card_t card = sp_cards[item->card];
 
     DN_LOG("(%d) %s %s-%d", 
-      num_instances, 
+      item->count, 
       dn_string_to_cstr(card.pokemon.name), 
       dn_string_to_cstr(sp_card_set_to_short_string(card.set)), 
       card.set_id);
@@ -495,8 +536,8 @@ sp_deck_t sp_deck_gen_random() {
 //////////////
 // SP MATCH //
 //////////////
-void sp_match_init(sp_match_data_t* match, sp_deck_t decks [2]) {
-  dn_os_zero_memory(match, sizeof(sp_match_data_t));
+void sp_match_init(sp_match_t* match, sp_deck_t decks [2]) {
+  dn_os_zero_memory(match, sizeof(sp_match_t));
   
   match->state = SP_MATCH_STATE_SETUP;
   match->order_flip = sp_rng_flip();
@@ -523,7 +564,7 @@ void sp_match_init(sp_match_data_t* match, sp_deck_t decks [2]) {
   match->players[1].id = SP_PLAYER_ID_1;
 }
 
-void sp_match_update(sp_match_data_t* match) {
+void sp_match_update(sp_match_t* match) {
   switch (match->state) {
     case SP_MATCH_STATE_INIT: {
       // flip for who goes first
@@ -541,19 +582,19 @@ void sp_match_update(sp_match_data_t* match) {
   }
 }
 
-bool sp_match_is_player_first(sp_match_data_t* match, sp_player_t* player) {
+bool sp_match_is_player_first(sp_match_t* match, sp_player_t* player) {
   u32 index = player - match->players;
   if ((index == 0) && match->order_flip == SP_RNG_FLIP_HEADS) return true;
   if ((index == 1) && match->order_flip == SP_RNG_FLIP_TAILS) return true;
   return false;
 }
 
-sp_turn_order_t sp_match_turn_order(sp_match_data_t* match, sp_player_t* player) {
+sp_turn_order_t sp_match_turn_order(sp_match_t* match, sp_player_t* player) {
   if (sp_match_is_player_first(match, player)) return SP_TURN_ORDER_FIRST;
   return SP_TURN_ORDER_SECOND;
 }
 
-dn_dynamic_array(sp_match_action_t) sp_match_calc_hand_actions(sp_match_data_t* match, sp_player_t* player, sp_card_location_t slot) {
+dn_dynamic_array(sp_match_action_t) sp_match_calc_hand_actions(sp_match_t* match, sp_player_t* player, sp_card_location_t slot) {
   dn_dynamic_array_t actions = dn_zero_initialize();
   dn_dynamic_array_init(&actions, sizeof(sp_match_action_t), &dn_allocators.bump.allocator);
 
@@ -591,14 +632,14 @@ dn_dynamic_array(sp_match_action_t) sp_match_calc_hand_actions(sp_match_data_t* 
   return actions;
 }
 
-dn_dynamic_array(sp_match_action_t) sp_match_calc_active_actions(sp_match_data_t* match, sp_player_t* player, sp_field_card_t* card) {
+dn_dynamic_array(sp_match_action_t) sp_match_calc_active_actions(sp_match_t* match, sp_player_t* player, sp_field_card_t* card) {
   dn_dynamic_array_t actions = dn_zero_initialize();
   dn_dynamic_array_init(&actions, sizeof(sp_match_action_t), &dn_allocators.bump.allocator);
 
   return actions;
 }
 
-dn_dynamic_array(sp_match_action_t) sp_match_calc_actions(sp_match_data_t* match, sp_player_t* player, sp_card_location_t location) {
+dn_dynamic_array(sp_match_action_t) sp_match_calc_actions(sp_match_t* match, sp_player_t* player, sp_card_location_t location) {
   switch(location.pile) {
     case SP_CARD_PILE_HAND: {
       return sp_match_calc_hand_actions(match, player, location);
@@ -615,7 +656,7 @@ dn_dynamic_array(sp_match_action_t) sp_match_calc_actions(sp_match_data_t* match
   }
 }
 
-sp_match_action_result_t sp_match_process_action(sp_match_data_t* match, sp_player_t* player, sp_match_action_t* action) {
+sp_match_action_result_t sp_match_process_action(sp_match_t* match, sp_player_t* player, sp_match_action_t* action) {
   sp_match_action_result_t result = {
     .player = player->id
   };
@@ -654,7 +695,7 @@ sp_match_action_result_t sp_match_process_action(sp_match_data_t* match, sp_play
   }
 }
 
-sp_player_t* sp_match_find_player(sp_match_data_t* match, sp_match_player_id_t id) {
+sp_player_t* sp_match_find_player(sp_match_t* match, sp_match_player_id_t id) {
   dn_for(index, 2) {
     sp_player_t* player = &match->players[index];
     if (player->id == id) {
@@ -663,6 +704,25 @@ sp_player_t* sp_match_find_player(sp_match_data_t* match, sp_match_player_id_t i
   }
 
   DN_UNREACHABLE();
+  return NULL;
+}
+
+sp_card_id_t sp_match_find_card(sp_match_t* match, sp_card_location_t location) {
+  DN_ASSERT(location.player != SP_PLAYER_ID_NONE && "sp_match_find_card received SP_PLAYER_ID_NONE");
+  sp_player_t* player = sp_match_find_player(match, location.player);
+  return sp_player_find_card(player, location);
+}
+
+sp_field_card_t* sp_match_find_field_card(sp_match_t* match, sp_card_location_t location) {
+  DN_ASSERT(location.player != SP_PLAYER_ID_NONE && "sp_match_find_field_card received SP_PLAYER_ID_NONE");
+  sp_player_t* player = sp_match_find_player(match, location.player);
+
+  switch (location.pile) {
+    case SP_CARD_PILE_ACTIVE: return &player->active;
+    case SP_CARD_PILE_BENCH: return &player->bench[location.slot];
+    default: DN_ASSERT(!"sp_match_find_field_card received a location that was not SP_CARD_PILE_ACTIVE or SP_CARD_PILE_BENCH");
+  }
+
   return NULL;
 }
 

@@ -30,22 +30,22 @@ typedef struct {
 
 typedef struct {
  sp_session_t* sessions [2];
- sp_match_data_t state;
-} sp_match_t;
+ sp_match_t state;
+} sp_server_match_t;
 
 typedef struct {
  lws_context* context;
  gs_hash_table(sp_token_t, sp_session_t*) sessions;
  gs_hash_table(dn_hash_t, sp_match_search_t) match_searches;
- dn_pool(sp_match_t) matches;
+ dn_pool(sp_server_match_t) matches;
 } sp_server_t;
 sp_server_t sp_server;
 
 void sp_server_init();
 void sp_server_queue_response(sp_session_t* session, sp_net_padded_response_t* response);
 void sp_server_process_request(sp_session_t* session, sp_net_request_t* request);
-void sp_server_sync_match(sp_match_t* match);
-sp_session_t* sp_server_find_player_session(sp_match_t* match, sp_token_t token);
+void sp_server_sync_match(sp_server_match_t* match);
+sp_session_t* sp_server_find_player_session(sp_server_match_t* match, sp_token_t token);
 int sp_protocol_handler(sp_ws_instance_t* instance, sp_ws_event_t event, void* userdata, void* data, size_t len);
 int sp_http_protocol_handler(struct lws* websocket, enum lws_callback_reasons event, void* userdata, void* data, size_t len);
 
@@ -97,7 +97,7 @@ void sp_server_init() {
 	lws_info.options = LWS_SERVER_OPTION_VALIDATE_UTF8 | LWS_SERVER_OPTION_HTTP_HEADERS_SECURITY_BEST_PRACTICES_ENFORCE;
 
  sp_server.context = lws_create_context(&lws_info);
- dn_pool_init(&sp_server.matches, 1024, sizeof(sp_match_t));
+ dn_pool_init(&sp_server.matches, 1024, sizeof(sp_server_match_t));
 
 }
 
@@ -167,8 +167,8 @@ void sp_server_process_request(sp_session_t* session, sp_net_request_t* request)
 
    // Allocate a match
    dn_pool_handle_t handle = dn_pool_reserve(&sp_server.matches);
-   sp_match_t* match = dn_pool_at(sp_match_t, &sp_server.matches, handle);
-   dn_os_zero_memory(match, sizeof(sp_match_t));
+   sp_server_match_t* match = dn_pool_at(sp_server_match_t, &sp_server.matches, handle);
+   dn_os_zero_memory(match, sizeof(sp_server_match_t));
 
    // Pack a few things we need per-client into a utility struct to iterate over
    typedef struct {
@@ -238,7 +238,7 @@ void sp_server_process_request(sp_session_t* session, sp_net_request_t* request)
   case SP_OPCODE_CLIENT_MATCH_ACTION: {
    lwsl_user("SP_OPCODE_CLIENT_MATCH_ACTION");
 
-   sp_match_t* match = dn_pool_at(sp_match_t, &sp_server.matches, session->match);
+   sp_server_match_t* match = dn_pool_at(sp_server_match_t, &sp_server.matches, session->match);
    DN_ASSERT(match);
 
    sp_player_t* player = sp_match_find_player(&match->state, session->match_id);
@@ -268,7 +268,7 @@ void sp_server_process_request(sp_session_t* session, sp_net_request_t* request)
  }
 }
 
-void sp_server_sync_match(sp_match_t* match) {
+void sp_server_sync_match(sp_server_match_t* match) {
  sp_net_padded_response_t message = {
   .payload = {
    .op = SP_OPCODE_MATCH_EVENT,
@@ -282,7 +282,7 @@ void sp_server_sync_match(sp_match_t* match) {
  sp_server_queue_response(match->sessions[1], &message);
 }
 
-sp_session_t* sp_server_find_player(sp_match_t* match, sp_token_t token) {
+sp_session_t* sp_server_find_player(sp_server_match_t* match, sp_token_t token) {
  dn_for(index, 2) {
   if (match->sessions[index]->token == token) {
    return match->sessions[index];
