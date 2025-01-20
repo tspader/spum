@@ -37,15 +37,15 @@
 #include "sp.h"
 
 sapp_desc sokol_main(int num_args, char** args) {
-    return (sapp_desc){
-        .init_cb = sp_client_init,
-        .frame_cb = sp_client_update,
-        .cleanup_cb = sp_client_shutdown,
-        .event_cb = sp_client_event,
-        .width = 400,
-        .height = 300,
-        .window_title = "spum",
-        .icon.sokol_default = true,
-        .logger.func = slog_func,
-    };
+  return (sapp_desc){
+    .init_cb = sp_client_init,
+    .frame_cb = sp_client_update,
+    .cleanup_cb = sp_client_shutdown,
+    .event_cb = sp_client_event,
+    .width = 400,
+    .height = 300,
+    .window_title = "spum",
+    .icon.sokol_default = true,
+    .logger.func = slog_func,
+  };
 }

@@ -21,9 +21,9 @@
 
 
 int main(int arg_count, char** args) {
-  dn_init();
-  sp_test();
-  sp_server_init();
+ dn_init();
+ sp_test();
+ sp_server_init();
 
 	while(true) {
 		lws_service(sp_server.context, 0);

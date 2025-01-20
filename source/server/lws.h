@@ -3,14 +3,14 @@
 dn_string_t lws_event_to_string(enum lws_callback_reasons event);
 
 #define sp_log_lws_event(event) \
-  dn_string_t dn_unique_name() = lws_event_to_string(event); \
-  lwsl_user("%s: event = %s (%d)\n", __func__, dn_string_to_cstr(dn_unique_name()), event);
+ dn_string_t dn_unique_name() = lws_event_to_string(event); \
+ lwsl_user("%s: event = %s (%d)\n", __func__, dn_string_to_cstr(dn_unique_name()), event);
 
 #endif
 
 #ifdef SP_LWS_IMPL
 dn_string_t lws_event_to_string(enum lws_callback_reasons event) {
-  switch (event) {
+ switch (event) {
 		case(LWS_CALLBACK_PROTOCOL_INIT): {
 				return dn_string_literal("LWS_CALLBACK_PROTOCOL_INIT");
 		}
@@ -359,9 +359,9 @@ dn_string_t lws_event_to_string(enum lws_callback_reasons event) {
 		case(LWS_CALLBACK_USER): {
 				return dn_string_literal("LWS_CALLBACK_USER");
 		}
-    default: {
+  default: {
 				return dn_string_literal("LWS_CALLBACK_UNKNOWN");
-    }
   }
+ }
 };
 #endif
