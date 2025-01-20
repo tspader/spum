@@ -21,6 +21,7 @@ typedef dn_str_buffer_t(SP_MAX_USERNAME_LEN) sp_username_t;
 // CLIENT REQUESTS OPS //
 /////////////////////////
 typedef enum {
+ SP_OPCODE_NONE,
  SP_OPCODE_ECHO,
  SP_OPCODE_REQUEST_TOKEN,
  SP_OPCODE_MATCH_REQUEST,
@@ -70,6 +71,7 @@ typedef enum {
   SP_NET_MATCH_EVENT_KIND_BEGIN,
   SP_NET_MATCH_EVENT_KIND_SYNC,
   SP_NET_MATCH_EVENT_KIND_ACTION_RESULT,
+  SP_NET_MATCH_EVENT_KIND_GAME_OVER,
 } sp_net_match_event_kind_t;
 
 typedef struct {
@@ -84,12 +86,17 @@ typedef struct {
 } sp_net_match_found_opponent_event_t;
 
 typedef struct {
+	sp_match_player_id_t winner;
+} sp_net_match_game_over_event_t;
+
+typedef struct {
  sp_net_match_event_kind_t kind;
 
  union {
   sp_net_match_found_opponent_event_t found;
   sp_match_t state;
   sp_net_match_action_event_t action;
+ 	sp_net_match_game_over_event_t game_over;
  };
 } sp_net_match_event_t;
 

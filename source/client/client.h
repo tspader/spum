@@ -116,6 +116,7 @@ sp_player_t*         sp_client_get_player();
 sp_player_t*         sp_client_get_opponent();
 sp_match_player_id_t sp_client_get_player_id();
 sp_match_player_id_t sp_client_get_opponent_id();
+dn_string_t          sp_client_get_username_of(sp_match_player_id_t player);
 bool                 sp_client_is_selected(sp_card_location_t location);
 void                 sp_client_select(sp_card_location_t location);
 void                 sp_client_deselect();
@@ -478,6 +479,9 @@ void sp_client_update_state() {
       break;
     }
     case SP_CLIENT_STATE_MATCH: {
+      if (sp_client.match.data.winner != SP_PLAYER_ID_NONE) {
+        sp_client.state = SP_CLIENT_STATE_IDLE;
+      }
       break;
     }
     default: {
@@ -829,6 +833,18 @@ void sp_client_process_match_event(sp_net_match_event_t* event) {
       sp_client_process_match_action_event(&event->action);
       break;
     }
+    case SP_NET_MATCH_EVENT_KIND_GAME_OVER: {
+      DN_LOG("SP_NET_MATCH_EVENT_GAME_OVER");
+
+      dn_string_t winner = sp_client_get_username_of(event->game_over.winner);
+
+      dn_string_builder_t builder = dn_tstring_builder();
+      dn_string_builder_append_fmt(&builder, dn_string_literal("%.*s won the battle"), 
+        winner.len, winner.data);
+      sp_client_log_push(&sp_client.log, dn_string_builder_write(&builder));
+
+      break;
+    }
     default: {
       DN_UNREACHABLE();
       break;
@@ -979,6 +995,9 @@ dn_string_t sp_client_build_action_result_description(dn_string_t username, sp_m
       dn_string_builder_append(&builder, dn_string_literal("tried to play a move, but it wasn't their turn"));
 			break;
     }
+    case SP_MATCH_ACTION_RESULT_GAME_OVER: {
+			break;
+    }
     case SP_MATCH_ACTION_NONE: {
       DN_UNREACHABLE();
 			break;
@@ -1014,6 +1033,14 @@ sp_match_player_id_t sp_client_get_opponent_id() {
     case SP_PLAYER_ID_1:       return SP_PLAYER_ID_0;
     default: DN_UNREACHABLE(); return SP_PLAYER_ID_NONE;
   }
+}
+
+dn_string_t sp_client_get_username_of(sp_match_player_id_t player) {
+  if (player == sp_client.match.id) return sp_client.usernames.player;
+  if (player != sp_client.match.id) return sp_client.usernames.opponent;
+
+  DN_UNREACHABLE();
+  return dn_string_literal("");
 }
 
 

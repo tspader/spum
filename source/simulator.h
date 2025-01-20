@@ -187,6 +187,7 @@ typedef struct {
 typedef struct {
   sp_match_state_t state;
   sp_rng_flip_t order_flip;
+	sp_match_player_id_t winner;
   sp_player_t players [2];
 } sp_match_t;
 
@@ -259,6 +260,7 @@ dn_dynamic_array(sp_match_action_t) sp_match_calc_field_actions(sp_match_t* matc
 dn_dynamic_array(sp_match_action_t) sp_match_calc_other_actions(sp_match_t* match, sp_player_t* player);
 sp_match_action_result_t            sp_match_process_action(sp_match_t* match, sp_player_t* player, sp_match_action_t* action);
 sp_player_t*                        sp_match_find_player(sp_match_t* match, sp_match_player_id_t id);
+sp_player_t*                        sp_match_find_opponent(sp_match_t* match, sp_match_player_id_t id);
 sp_field_card_t*                    sp_match_find_field_card(sp_match_t* match, sp_card_location_t location);
 sp_card_id_t                        sp_match_find_card(sp_match_t* match, sp_card_location_t location);
 
@@ -575,24 +577,6 @@ void sp_match_init(sp_match_t* match, sp_deck_t decks [2]) {
   match->players[1].id = SP_PLAYER_ID_1;
 }
 
-void sp_match_update(sp_match_t* match) {
-  switch (match->state) {
-    case SP_MATCH_STATE_INIT: {
-      // flip for who goes first
-      // generate initial hands
-      break;
-    }
-    case SP_MATCH_STATE_SETUP: {
-      // wait for everyone to place their mons
-      break;
-    }
-    case SP_MATCH_STATE_TURN_IDLE: {
-      // wait for everyone to place their mons
-      break;
-    }
-  }
-}
-
 bool sp_match_is_player_first(sp_match_t* match, sp_player_t* player) {
   u32 index = player - match->players;
   if ((index == 0) && match->order_flip == SP_RNG_FLIP_HEADS) return true;
@@ -709,7 +693,9 @@ sp_match_action_result_t sp_match_process_action(sp_match_t* match, sp_player_t*
 
   switch (action->kind) {
     case SP_MATCH_ACTION_CONCEDE: {
+			sp_player_t* opponent = sp_match_find_opponent(match, player->id);
 			match->state = SP_MATCH_STATE_DONE;
+			match->winner = opponent->id;
 			result.status = SP_MATCH_ACTION_STATUS_OK;
     	result.kind = SP_MATCH_ACTION_RESULT_GAME_OVER;
     	return result;
@@ -758,7 +744,8 @@ sp_match_action_result_t sp_match_process_action(sp_match_t* match, sp_player_t*
 
       break;
     }
-    case SP_MATCH_ACTION_ATTACH_BASIC_ENERGY: {
+    case SP_MATCH_ACTION_ATTACH_BASIC_ENERGY:
+    case SP_MATCH_ACTION_NONE: {
       DN_UNREACHABLE();
       break;
     }
@@ -769,6 +756,18 @@ sp_player_t* sp_match_find_player(sp_match_t* match, sp_match_player_id_t id) {
   dn_for(index, 2) {
     sp_player_t* player = &match->players[index];
     if (player->id == id) {
+      return player;
+    }
+  }
+
+  DN_UNREACHABLE();
+  return NULL;
+}
+
+sp_player_t* sp_match_find_opponent(sp_match_t* match, sp_match_player_id_t id) {
+	dn_for(index, 2) {
+    sp_player_t* player = &match->players[index];
+    if (player->id != id) {
       return player;
     }
   }
