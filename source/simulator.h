@@ -128,6 +128,7 @@ typedef enum {
   SP_MATCH_STATE_INIT,
   SP_MATCH_STATE_SETUP,
   SP_MATCH_STATE_TURN_IDLE,
+  SP_MATCH_STATE_DONE,
 } sp_match_state_t;
 
 typedef enum {
@@ -198,9 +199,10 @@ typedef struct {
 
 typedef enum {
   SP_MATCH_ACTION_NONE,
+  SP_MATCH_ACTION_CONCEDE,
   SP_MATCH_ACTION_SETUP,
+  SP_MATCH_ACTION_SETUP_RESET,
   SP_MATCH_ACTION_ATTACH_BASIC_ENERGY,
-  SP_MATCH_ACTION_ATTACK,
 } sp_match_action_kind_t;
 
 typedef enum {
@@ -211,6 +213,8 @@ typedef enum {
 typedef enum {
   SP_MATCH_ACTION_RESULT_NONE,
 
+  SP_MATCH_ACTION_RESULT_GAME_OVER,
+  SP_MATCH_ACTION_RESULT_SETUP_RESET,
   SP_MATCH_ACTION_RESULT_SETUP_PLAY_BASIC,
 
   SP_MATCH_ACTION_RESULT_NOT_YOUR_TURN,
@@ -248,7 +252,11 @@ void                                sp_match_init(sp_match_t* match, sp_deck_t d
 void                                sp_match_update(sp_match_t* match);
 bool                                sp_match_is_player_first(sp_match_t* match, sp_player_t* player);
 sp_turn_order_t                     sp_match_turn_order(sp_match_t* match, sp_player_t* player);
-dn_dynamic_array(sp_match_action_t) sp_match_calc_actions(sp_match_t* match, sp_player_t* player, sp_card_location_t location);
+dn_dynamic_array(sp_match_action_t) sp_match_calc_all_actions(sp_match_t* match, sp_player_t* player, sp_card_location_t location);
+dn_dynamic_array(sp_match_action_t) sp_match_calc_card_actions(sp_match_t* match, sp_player_t* player, sp_card_location_t location);
+dn_dynamic_array(sp_match_action_t) sp_match_calc_hand_actions(sp_match_t* match, sp_player_t* player, sp_card_location_t location);
+dn_dynamic_array(sp_match_action_t) sp_match_calc_field_actions(sp_match_t* match, sp_player_t* player, sp_card_location_t location);
+dn_dynamic_array(sp_match_action_t) sp_match_calc_other_actions(sp_match_t* match, sp_player_t* player);
 sp_match_action_result_t            sp_match_process_action(sp_match_t* match, sp_player_t* player, sp_match_action_t* action);
 sp_player_t*                        sp_match_find_player(sp_match_t* match, sp_match_player_id_t id);
 sp_field_card_t*                    sp_match_find_field_card(sp_match_t* match, sp_card_location_t location);
@@ -267,8 +275,11 @@ void                                sp_player_generate_energy(sp_player_t* playe
 sp_card_id_t                        sp_player_find_card(sp_player_t* player, sp_card_location_t location);
 sp_field_card_t*                    sp_player_find_field_card(sp_player_t* player, sp_card_location_t location);
 bool                                sp_player_is_location_occupied(sp_player_t* player, sp_card_location_t location);
+void                                sp_player_clear_location(sp_player_t* player, sp_card_location_t location);
 void                                sp_player_remove_from_pile(sp_player_t* player, sp_card_id_t* pile, u32 pile_size, sp_card_id_t card);
-void                                sp_player_remove_from_hand(sp_player_t* player, sp_card_id_t);
+void                                sp_player_remove_from_hand(sp_player_t* player, sp_card_id_t card);
+void                                sp_player_add_to_pile(sp_player_t* player, sp_card_id_t* pile, u32 pile_size, sp_card_id_t card);
+void                                sp_player_add_to_hand(sp_player_t* player, sp_card_id_t card);
 void                                sp_player_play_card_to_field(sp_player_t* player, sp_card_id_t card, sp_card_location_t slot);
               
 sp_deck_count_t                     sp_deck_count(sp_deck_t* deck);
@@ -632,14 +643,14 @@ dn_dynamic_array(sp_match_action_t) sp_match_calc_hand_actions(sp_match_t* match
   return actions;
 }
 
-dn_dynamic_array(sp_match_action_t) sp_match_calc_active_actions(sp_match_t* match, sp_player_t* player, sp_field_card_t* card) {
+dn_dynamic_array(sp_match_action_t) sp_match_calc_field_actions(sp_match_t* match, sp_player_t* player, sp_card_location_t card) {
   dn_dynamic_array_t actions = dn_zero_initialize();
   dn_dynamic_array_init(&actions, sizeof(sp_match_action_t), &dn_allocators.bump.allocator);
 
   return actions;
 }
 
-dn_dynamic_array(sp_match_action_t) sp_match_calc_actions(sp_match_t* match, sp_player_t* player, sp_card_location_t location) {
+dn_dynamic_array(sp_match_action_t) sp_match_calc_card_actions(sp_match_t* match, sp_player_t* player, sp_card_location_t location) {
   switch(location.pile) {
     case SP_CARD_PILE_HAND: {
       return sp_match_calc_hand_actions(match, player, location);
@@ -656,6 +667,35 @@ dn_dynamic_array(sp_match_action_t) sp_match_calc_actions(sp_match_t* match, sp_
   }
 }
 
+dn_dynamic_array(sp_match_action_t) sp_match_calc_other_actions(sp_match_t* match, sp_player_t* player) {
+  dn_dynamic_array(sp_match_action_t) actions = dn_zero_initialize();
+  dn_dynamic_array_init(&actions, sizeof(sp_match_action_t), &dn_allocators.bump.allocator);
+
+  dn_dynamic_array_push(&actions, &(sp_match_action_t) {
+    .kind = SP_MATCH_ACTION_CONCEDE
+  });
+
+  dn_dynamic_array_push(&actions, &(sp_match_action_t) {
+    .kind = SP_MATCH_ACTION_SETUP_RESET
+  });
+
+  return actions;  
+}
+
+dn_dynamic_array(sp_match_action_t) sp_match_calc_all_actions(sp_match_t* match, sp_player_t* player, sp_card_location_t card) {
+  dn_dynamic_array(sp_match_action_t) actions = dn_zero_initialize();
+  dn_dynamic_array_init(&actions, sizeof(sp_match_action_t), &dn_allocators.bump.allocator);
+
+  dn_dynamic_array_t other_actions = sp_match_calc_other_actions(match, player);
+  dn_dynamic_array_push_n(&actions, other_actions.data, other_actions.size);
+
+  dn_dynamic_array_t card_actions = sp_match_calc_card_actions(match, player, card);
+  dn_dynamic_array_push_n(&actions, card_actions.data, card_actions.size);
+
+  return actions;  
+}
+
+
 sp_match_action_result_t sp_match_process_action(sp_match_t* match, sp_player_t* player, sp_match_action_t* action) {
   sp_match_action_result_t result = {
     .player = player->id
@@ -668,6 +708,12 @@ sp_match_action_result_t sp_match_process_action(sp_match_t* match, sp_player_t*
   }
 
   switch (action->kind) {
+    case SP_MATCH_ACTION_CONCEDE: {
+			match->state = SP_MATCH_STATE_DONE;
+			result.status = SP_MATCH_ACTION_STATUS_OK;
+    	result.kind = SP_MATCH_ACTION_RESULT_GAME_OVER;
+    	return result;
+		}
     case SP_MATCH_ACTION_SETUP: {
       DN_ASSERT(match->state == SP_MATCH_STATE_SETUP);
 
@@ -688,7 +734,31 @@ sp_match_action_result_t sp_match_process_action(sp_match_t* match, sp_player_t*
 
       break;
     }
-    default: {
+    case SP_MATCH_ACTION_SETUP_RESET: {
+      DN_ASSERT(match->state == SP_MATCH_STATE_SETUP);
+
+      sp_card_location_t locations [] = {
+        { .pile = SP_CARD_PILE_ACTIVE },
+        { .pile = SP_CARD_PILE_BENCH, .slot = 0 },
+        { .pile = SP_CARD_PILE_BENCH, .slot = 1 },
+        { .pile = SP_CARD_PILE_BENCH, .slot = 2 },
+      };
+
+      dn_for_arr(locations, index) {
+				sp_card_location_t location = locations[index];
+        if (sp_player_is_location_occupied(player, location)) {
+          sp_player_add_to_hand(player, sp_player_find_card(player, location));
+          sp_player_clear_location(player, location);
+        }
+      }
+
+      result.status = SP_MATCH_ACTION_STATUS_OK;
+      result.kind = SP_MATCH_ACTION_RESULT_SETUP_RESET;
+      return result;
+
+      break;
+    }
+    case SP_MATCH_ACTION_ATTACH_BASIC_ENERGY: {
       DN_UNREACHABLE();
       break;
     }
@@ -872,6 +942,26 @@ bool sp_player_is_location_occupied(sp_player_t* player, sp_card_location_t loca
   return sp_player_find_card(player, location) != SP_CARD_NONE;
 }
 
+void sp_player_clear_location(sp_player_t* player, sp_card_location_t location) {
+  switch (location.pile) {
+    case SP_CARD_PILE_ACTIVE: {
+      player->active = dn_zero_struct(sp_field_card_t);
+      break;
+    }
+    case SP_CARD_PILE_BENCH: {
+      player->bench[location.slot] = dn_zero_struct(sp_field_card_t);
+      break;
+    }
+    case SP_CARD_PILE_DECK:
+    case SP_CARD_PILE_DISCARD:
+    case SP_CARD_PILE_HAND: 
+    default: {
+      DN_BROKEN();
+      break;
+    }
+  }
+}
+
 void sp_player_remove_from_pile(sp_player_t* player, sp_card_id_t* pile, u32 pile_size, sp_card_id_t card) {
   sp_card_iter_t it = sp_card_iter_forward(pile, pile_size);
   for (; sp_card_iter_valid(&it); sp_card_iter_next(&it)) {
@@ -889,6 +979,20 @@ void sp_player_remove_from_pile(sp_player_t* player, sp_card_id_t* pile, u32 pil
 
 void sp_player_remove_from_hand(sp_player_t* player, sp_card_id_t card) {
   sp_player_remove_from_pile(player, player->hand, SP_HAND_SIZE, card);
+}
+
+void sp_player_add_to_pile(sp_player_t* player, sp_card_id_t* pile, u32 pile_size, sp_card_id_t card) {
+  sp_card_iter_t it = sp_card_iter_forward(pile, pile_size);
+  for (; sp_card_iter_valid(&it); sp_card_iter_next(&it)) {
+    // Just getting to the last index
+  }
+
+  DN_ASSERT(it.index < pile_size && "sp_player_add_to_pile: pile is full");
+  pile[it.index] = card;
+}
+
+void sp_player_add_to_hand(sp_player_t* player, sp_card_id_t card) {
+  sp_player_add_to_pile(player, player->hand, SP_HAND_SIZE, card);
 }
 
 void sp_player_play_card_to_field(sp_player_t* player, sp_card_id_t card, sp_card_location_t location) {

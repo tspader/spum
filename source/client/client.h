@@ -118,6 +118,7 @@ sp_match_player_id_t sp_client_get_player_id();
 sp_match_player_id_t sp_client_get_opponent_id();
 bool                 sp_client_is_selected(sp_card_location_t location);
 void                 sp_client_select(sp_card_location_t location);
+void                 sp_client_deselect();
 dn_string_t          sp_client_field_card_label(sp_field_card_t* field_card);
 dn_string_t          sp_client_energy_to_short_id(sp_pokemon_type_t energy);
 dn_string_t          sp_client_build_action_description(sp_match_action_t* action);
@@ -385,7 +386,12 @@ bool sp_client_draw_field_card(sp_card_location_t location) {
   if (is_card_selected) nk_style_pop_style_item(nk);
 
   if (pressed) {
-    sp_client_select(location);
+    if (is_card_selected) {
+      sp_client_deselect();
+    }
+    else {
+      sp_client_select(location);
+    }
   }
 
   return pressed;
@@ -410,7 +416,12 @@ bool sp_client_draw_hand_card(sp_card_location_t location) {
   if (is_card_selected) nk_style_pop_style_item(nk);
 
   if (pressed) {
-    sp_client_select(location);
+    if (is_card_selected) {
+      sp_client_deselect();
+    }
+    else {
+      sp_client_select(location);
+    }
   }
 
   return pressed;
@@ -676,7 +687,7 @@ void sp_client_draw_match() {
       // nk_layout_row(nk, NK_DYNAMIC, 200, 2, dn_arr_lval(f32, .333, .667));
       nk_layout_row_dynamic(nk, 16, 1);
 
-      dn_dynamic_array(sp_match_action_t) actions = sp_match_calc_actions(&sp_client.match.data, player, sp_client.ui.selected_card);
+      dn_dynamic_array(sp_match_action_t) actions = sp_match_calc_all_actions(&sp_client.match.data, player, sp_client.ui.selected_card);
 
       dn_for(index, actions.size) {
         sp_match_action_t* action = (sp_match_action_t*)dn_dynamic_array_at(&actions, index);
@@ -779,9 +790,10 @@ dn_string_t sp_client_generate_username() {
 }
 
 
-///////////////
-// WEBSOCKET //
-///////////////
+
+//////////////////
+// MATCH EVENTS //
+//////////////////
 void sp_client_process_match_event(sp_net_match_event_t* event) {  
   switch(event->kind) {
     case SP_NET_MATCH_EVENT_KIND_FOUND_OPPONENT: {
@@ -832,6 +844,7 @@ void sp_client_process_match_action_event(sp_net_match_action_event_t* event) {
   dn_color_t color = is_you ? dn_colors.zomp : dn_colors.indian_red;
 
   switch (result->kind) {
+    case SP_MATCH_ACTION_RESULT_SETUP_RESET:
     case SP_MATCH_ACTION_RESULT_SETUP_PLAY_BASIC:
       sp_client_log_push_colored(&sp_client.log, sp_client_build_action_result_description(username, &event->action, &event->result), color);
       break;
@@ -846,105 +859,10 @@ void sp_client_process_match_action_event(sp_net_match_action_event_t* event) {
   }
 }
 
-void sp_client_process_response(sp_net_response_t* response) {
-  switch (response->op) {
-    case SP_OPCODE_ECHO: {
-      dn_log("SP_OPCODE_ECHO");
-      break;
-    }
-    case SP_OPCODE_REQUEST_TOKEN: {
-      DN_LOG("SP_OPCODE_REQUEST_TOKEN");
-      dn_os_memory_copy(&response->request_token.token, &sp_client.token, sizeof(sp_token_t));
-      break;
-    }
-    case SP_OPCODE_MATCH_EVENT: {
-      DN_LOG("SP_OPCODE_MATCH_EVENT");
-      sp_client_process_match_event(&response->match_event);
-      break;
-    }
-    default: {
-      DN_UNREACHABLE();
-      break;
-    }
-  }
-}
-
-sp_player_t* sp_client_get_player() {
-  switch (sp_client.match.id) {
-    case SP_PLAYER_ID_0:       return &sp_client.match.data.players[0];
-    case SP_PLAYER_ID_1:       return &sp_client.match.data.players[1];
-    default: DN_UNREACHABLE(); return NULL;
-  }
-}
-
-sp_player_t* sp_client_get_opponent() {
-  switch (sp_client.match.id) {
-    case SP_PLAYER_ID_0:       return &sp_client.match.data.players[1];
-    case SP_PLAYER_ID_1:       return &sp_client.match.data.players[0];
-    default: DN_UNREACHABLE(); return NULL;
-  }
-}
-
-sp_match_player_id_t sp_client_get_player_id() {
-  return sp_client.match.id;
-}
-
-sp_match_player_id_t sp_client_get_opponent_id() {
-  switch (sp_client.match.id) {
-    case SP_PLAYER_ID_0:       return SP_PLAYER_ID_1;
-    case SP_PLAYER_ID_1:       return SP_PLAYER_ID_0;
-    default: DN_UNREACHABLE(); return SP_PLAYER_ID_NONE;
-  }
-}
-
-
-bool sp_client_is_selected(sp_card_location_t location) {
-  return dn_os_is_memory_equal(&location, &sp_client.ui.selected_card, sizeof(sp_card_location_t));
-}
-
-void sp_client_select(sp_card_location_t location) {
-  sp_client.ui.selected_card = location;
-  sp_client.ui.selected_action = dn_zero_struct(sp_match_action_t);
-}
-
-
-void sp_client_submit_request(sp_net_request_t* request) {
-  dn_os_memory_copy(sp_magic, request->magic, sizeof(sp_net_magic_t));
-  request->token = sp_client.token;
-  emscripten_websocket_send_binary(sp_client.websocket, request, sizeof(sp_net_request_t));
-}
-
-dn_string_t sp_client_state_to_string(sp_client_state_t state) {
-  switch (state) {
-    case SP_CLIENT_STATE_INIT:    return dn_string_literal("SP_CLIENT_STATE_INIT");
-    case SP_CLIENT_STATE_WS_INIT:  return dn_string_literal("SP_CLIENT_WS_INIT");
-    case SP_CLIENT_STATE_TOKEN_WAIT: return dn_string_literal("SP_CLIENT_TOKEN_WAIT");
-    case SP_CLIENT_STATE_IDLE:    return dn_string_literal("SP_CLIENT_IDLE");
-    case SP_CLIENT_STATE_MATCH_WAIT: return dn_string_literal("SP_CLIENT_MATCH_WAIT");
-    case SP_CLIENT_STATE_MATCH:   return dn_string_literal("SP_CLIENT_MATCH");
-    default:             return dn_string_literal("SP_CLIENT_UNKNOWN");
-  }
-}
-
-dn_string_t sp_client_search_state_to_string(sp_client_search_state_t state) {
-  switch (state) {
-    case SP_CLIENT_SEARCH_NONE:     return dn_string_literal("SP_CLIENT_SEARCH_NONE");
-    case SP_CLIENT_SEARCH_REQUESTED:   return dn_string_literal("SP_CLIENT_SEARCH_REQUESTED");
-    case SP_CLIENT_SEARCH_SEARCHING:   return dn_string_literal("SP_CLIENT_SEARCH_SEARCHING");
-    case SP_CLIENT_SEARCH_AWAITING_SYNC: return dn_string_literal("SP_CLIENT_SEARCH_AWAITING_SYNC");
-    case SP_CLIENT_SEARCH_READY:     return dn_string_literal("SP_CLIENT_SEARCH_READY");
-    case SP_CLIENT_SEARCH_CANCEL:    return dn_string_literal("SP_CLIENT_SEARCH_CANCEL");
-    default:               return dn_string_literal("SP_CLIENT_SEARCH_UNKNOWN");
-  }
-}
-
 dn_string_t sp_client_build_action_description(sp_match_action_t* action) {
   dn_string_builder_t builder = dn_tstring_builder();
 
   switch (action->kind) {
-    case SP_MATCH_ACTION_NONE: {
-      return dn_string_literal("None");
-    }
     case SP_MATCH_ACTION_SETUP: {
       sp_match_action_setup_data_t* data = &action->setup;
       sp_card_t* card = &sp_cards[data->card];
@@ -975,7 +893,14 @@ dn_string_t sp_client_build_action_description(sp_match_action_t* action) {
       
       return dn_string_builder_write(&builder);
     }
-    default: {
+    case SP_MATCH_ACTION_SETUP_RESET: {
+      return dn_string_literal("Clear the field and start over");
+    }
+    case SP_MATCH_ACTION_CONCEDE: {
+      return dn_string_literal("Concede the game");
+    }
+    case SP_MATCH_ACTION_ATTACH_BASIC_ENERGY:
+    case SP_MATCH_ACTION_NONE: {
       DN_UNREACHABLE();
       return dn_string_literal("");
     }
@@ -1043,16 +968,100 @@ dn_string_t sp_client_build_action_result_description(dn_string_t username, sp_m
           DN_UNREACHABLE();
         }
       }
-      
 
-      return dn_string_builder_write(&builder);
+			break;
+    }
+    case SP_MATCH_ACTION_RESULT_SETUP_RESET: {
+      dn_string_builder_append(&builder, dn_string_literal("reset their side of the field"));
+			break;
     }
     case SP_MATCH_ACTION_RESULT_NOT_YOUR_TURN: {
+      dn_string_builder_append(&builder, dn_string_literal("tried to play a move, but it wasn't their turn"));
+			break;
+    }
+    case SP_MATCH_ACTION_NONE: {
+      DN_UNREACHABLE();
+			break;
+    }
+  }
 
+	return dn_string_builder_write(&builder);
+}
+
+sp_player_t* sp_client_get_player() {
+  switch (sp_client.match.id) {
+    case SP_PLAYER_ID_0:       return &sp_client.match.data.players[0];
+    case SP_PLAYER_ID_1:       return &sp_client.match.data.players[1];
+    default: DN_UNREACHABLE(); return NULL;
+  }
+}
+
+sp_player_t* sp_client_get_opponent() {
+  switch (sp_client.match.id) {
+    case SP_PLAYER_ID_0:       return &sp_client.match.data.players[1];
+    case SP_PLAYER_ID_1:       return &sp_client.match.data.players[0];
+    default: DN_UNREACHABLE(); return NULL;
+  }
+}
+
+sp_match_player_id_t sp_client_get_player_id() {
+  return sp_client.match.id;
+}
+
+sp_match_player_id_t sp_client_get_opponent_id() {
+  switch (sp_client.match.id) {
+    case SP_PLAYER_ID_0:       return SP_PLAYER_ID_1;
+    case SP_PLAYER_ID_1:       return SP_PLAYER_ID_0;
+    default: DN_UNREACHABLE(); return SP_PLAYER_ID_NONE;
+  }
+}
+
+
+///////////////
+// MATCH LOG //
+///////////////
+void sp_client_log_init(sp_client_log_t* log) {
+  dn_dynamic_array_init(&log->items, sizeof(sp_client_log_item_t), &dn_allocators.standard.allocator);
+}
+
+void sp_client_log_push(sp_client_log_t* log, dn_string_t str) {
+  dn_string_t copy = dn_string_copy(str, log->items.allocator);
+  dn_dynamic_array_push(&log->items, &(sp_client_log_item_t) {
+    .message = dn_string_copy(str, log->items.allocator),
+    .color = dn_colors.white
+  });
+}
+
+void sp_client_log_push_colored(sp_client_log_t* log, dn_string_t str, dn_color_t color) {
+  dn_dynamic_array_push(&log->items, &(sp_client_log_item_t) {
+    .message = dn_string_copy(str, log->items.allocator),
+    .color = color
+  });
+}
+
+
+///////////////
+// WEBSOCKET //
+///////////////
+void sp_client_process_response(sp_net_response_t* response) {
+  switch (response->op) {
+    case SP_OPCODE_ECHO: {
+      dn_log("SP_OPCODE_ECHO");
+      break;
+    }
+    case SP_OPCODE_REQUEST_TOKEN: {
+      DN_LOG("SP_OPCODE_REQUEST_TOKEN");
+      dn_os_memory_copy(&response->request_token.token, &sp_client.token, sizeof(sp_token_t));
+      break;
+    }
+    case SP_OPCODE_MATCH_EVENT: {
+      DN_LOG("SP_OPCODE_MATCH_EVENT");
+      sp_client_process_match_event(&response->match_event);
+      break;
     }
     default: {
       DN_UNREACHABLE();
-      return dn_string_literal("");
+      break;
     }
   }
 }
@@ -1079,22 +1088,52 @@ bool sp_client_on_websocket_message(int event_type, const EmscriptenWebSocketMes
   return true;
 }
 
-void sp_client_log_init(sp_client_log_t* log) {
-  dn_dynamic_array_init(&log->items, sizeof(sp_client_log_item_t), &dn_allocators.standard.allocator);
+void sp_client_submit_request(sp_net_request_t* request) {
+  dn_os_memory_copy(sp_magic, request->magic, sizeof(sp_net_magic_t));
+  request->token = sp_client.token;
+  emscripten_websocket_send_binary(sp_client.websocket, request, sizeof(sp_net_request_t));
 }
 
-void sp_client_log_push(sp_client_log_t* log, dn_string_t str) {
-  dn_string_t copy = dn_string_copy(str, log->items.allocator);
-  dn_dynamic_array_push(&log->items, &(sp_client_log_item_t) {
-    .message = dn_string_copy(str, log->items.allocator),
-    .color = dn_colors.white
+
+///////////
+// UTILS //
+///////////
+bool sp_client_is_selected(sp_card_location_t location) {
+  return dn_os_is_memory_equal(&location, &sp_client.ui.selected_card, sizeof(sp_card_location_t));
+}
+
+void sp_client_select(sp_card_location_t location) {
+  sp_client.ui.selected_card = location;
+  sp_client.ui.selected_action = dn_zero_struct(sp_match_action_t);
+}
+
+void sp_client_deselect() {
+  sp_client_select((sp_card_location_t) { 
+    .pile = SP_CARD_PILE_NONE 
   });
 }
 
-void sp_client_log_push_colored(sp_client_log_t* log, dn_string_t str, dn_color_t color) {
-  dn_dynamic_array_push(&log->items, &(sp_client_log_item_t) {
-    .message = dn_string_copy(str, log->items.allocator),
-    .color = color
-  });
+dn_string_t sp_client_state_to_string(sp_client_state_t state) {
+  switch (state) {
+    case SP_CLIENT_STATE_INIT:    return dn_string_literal("SP_CLIENT_STATE_INIT");
+    case SP_CLIENT_STATE_WS_INIT:  return dn_string_literal("SP_CLIENT_WS_INIT");
+    case SP_CLIENT_STATE_TOKEN_WAIT: return dn_string_literal("SP_CLIENT_TOKEN_WAIT");
+    case SP_CLIENT_STATE_IDLE:    return dn_string_literal("SP_CLIENT_IDLE");
+    case SP_CLIENT_STATE_MATCH_WAIT: return dn_string_literal("SP_CLIENT_MATCH_WAIT");
+    case SP_CLIENT_STATE_MATCH:   return dn_string_literal("SP_CLIENT_MATCH");
+    default:             return dn_string_literal("SP_CLIENT_UNKNOWN");
+  }
+}
+
+dn_string_t sp_client_search_state_to_string(sp_client_search_state_t state) {
+  switch (state) {
+    case SP_CLIENT_SEARCH_NONE:     return dn_string_literal("SP_CLIENT_SEARCH_NONE");
+    case SP_CLIENT_SEARCH_REQUESTED:   return dn_string_literal("SP_CLIENT_SEARCH_REQUESTED");
+    case SP_CLIENT_SEARCH_SEARCHING:   return dn_string_literal("SP_CLIENT_SEARCH_SEARCHING");
+    case SP_CLIENT_SEARCH_AWAITING_SYNC: return dn_string_literal("SP_CLIENT_SEARCH_AWAITING_SYNC");
+    case SP_CLIENT_SEARCH_READY:     return dn_string_literal("SP_CLIENT_SEARCH_READY");
+    case SP_CLIENT_SEARCH_CANCEL:    return dn_string_literal("SP_CLIENT_SEARCH_CANCEL");
+    default:               return dn_string_literal("SP_CLIENT_SEARCH_UNKNOWN");
+  }
 }
 #endif
