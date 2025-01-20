@@ -44,6 +44,7 @@ sp_server_t sp_server;
 void sp_server_init();
 void sp_server_queue_response(sp_session_t* session, sp_net_padded_response_t* response);
 void sp_server_process_request(sp_session_t* session, sp_net_request_t* request);
+void sp_server_sync_match(sp_match_t* match);
 sp_session_t* sp_server_find_player_session(sp_match_t* match, sp_token_t token);
 int  sp_protocol_handler(sp_ws_instance_t* instance, sp_ws_event_t event, void* userdata, void* data, size_t len);
 int  sp_http_protocol_handler(struct lws* websocket, enum lws_callback_reasons event, void* userdata, void* data, size_t len);
@@ -187,6 +188,13 @@ void sp_server_process_request(sp_session_t* session, sp_net_request_t* request)
         clients[1].search->deck
       });
 
+      // Mark down the match in each client's persistent storage and vice versa
+      dn_for_arr(clients, i) {
+        clients[i].session->match = handle;
+        clients[i].session->match_id = match->state.players[i].id;
+        match->sessions[i] = clients[i].session;
+      }
+
       sp_net_padded_response_t response = dn_zero_initialize();
 
       // Send messages back to the client
@@ -200,11 +208,14 @@ void sp_server_process_request(sp_session_t* session, sp_net_request_t* request)
           .payload = {
             .op = SP_OPCODE_MATCH_EVENT,
             .match_event = {
-              .kind = SP_NET_MATCH_EVENT_KIND_BEGIN,
-              .username = dn_zero_initialize()
+              .kind = SP_NET_MATCH_EVENT_KIND_FOUND_OPPONENT,
+              .found = {
+                .username = dn_zero_initialize(),
+                .your_match_id = client->session->match_id,
+              }
             }
         }};
-        dn_string_copy_to_str_buffer(other_client->session->username, &response.payload.match_event.username);
+        dn_string_copy_to_str_buffer(other_client->session->username, &response.payload.match_event.found.username);
         sp_server_queue_response(client->session, &response);
 
         // Then, send over the first match event, which contains the initial state
@@ -213,18 +224,11 @@ void sp_server_process_request(sp_session_t* session, sp_net_request_t* request)
           .payload = {
             .op = SP_OPCODE_MATCH_EVENT,
             .match_event = (sp_net_match_event_t){
-              .kind = SP_NET_MATCH_EVENT_KIND_SYNC,
+              .kind = SP_NET_MATCH_EVENT_KIND_BEGIN,
               .state = match->state
             }
         }};
         sp_server_queue_response(client->session, &response);
-      }
-
-      // Mark down the match in each client's persistent storage and vice versa
-      dn_for_arr(clients, i) {
-        clients[i].session->match = handle;
-        clients[i].session->match_id = match->state.players[i].id;
-        match->sessions[i] = clients[i].session;
       }
 
       // Purge the request from our data structures        
@@ -245,13 +249,16 @@ void sp_server_process_request(sp_session_t* session, sp_net_request_t* request)
           .match_event = {
             .kind = SP_NET_MATCH_EVENT_KIND_ACTION_RESULT,
             .action = {
+              .token = session->token,
               .action = request->match_action.action,
               .result = sp_match_process_action(&match->state, player, &request->match_action.action)
             }
           }
         }
       };
-      sp_server_queue_response(session, &response);
+      sp_server_queue_response(match->sessions[0], &response);
+      sp_server_queue_response(match->sessions[1], &response);
+      sp_server_sync_match(match);
       break;
     }
     default: {
@@ -259,6 +266,20 @@ void sp_server_process_request(sp_session_t* session, sp_net_request_t* request)
       break;
     }
   }
+}
+
+void sp_server_sync_match(sp_match_t* match) {
+  sp_net_padded_response_t message = {
+    .payload = {
+      .op = SP_OPCODE_MATCH_EVENT,
+      .match_event = {
+        .kind = SP_NET_MATCH_EVENT_KIND_SYNC,
+        .state = match->state
+      }
+    }
+  };
+  sp_server_queue_response(match->sessions[0], &message);
+  sp_server_queue_response(match->sessions[1], &message);
 }
 
 sp_session_t* sp_server_find_player(sp_match_t* match, sp_token_t token) {

@@ -672,7 +672,8 @@ typedef struct nk_style_button nk_style_button;
 
 void          nk_dn_string(nk_context* nk, dn_string_t str, nk_flags flags);
 void          nk_dn_string_wrap(nk_context* nk, dn_string_t str);
-void          nk_dn_string_colored(nk_context* nk, dn_string_t str, nk_flags flags, dn_color_t color);
+void          nk_dn_string_colored(nk_context* nk, dn_string_t str, nk_flags alignment, dn_color_t color);
+void          nk_dn_string_wrap_colored(nk_context* nk, dn_string_t str, dn_color_t color);
 void          nk_edit_dn_string(nk_context* nk, nk_flags flags, dn_string_t* buffer, u32 max_len, nk_plugin_filter filter);
 bool          nk_selectable_dn_string(nk_context* nk, dn_string_t str, nk_flags flags, nk_bool* value);
 bool          nk_button_dn_string(nk_context* nk, dn_string_t str);
@@ -772,8 +773,12 @@ void nk_dn_string_wrap(nk_context* nk, dn_string_t str) {
   nk_text_wrap(nk, (char*)str.data, (i32)str.len);
 }
 
-void nk_dn_string_colored(struct nk_context* nk, dn_string_t str, nk_flags flags, dn_color_t color) {
-  nk_text_colored(nk, (char*)str.data, (i32)str.len, flags, dn_color_to_nk_color(color));
+void nk_dn_string_colored(struct nk_context* nk, dn_string_t str, nk_flags alignment, dn_color_t color) {
+  nk_text_colored(nk, (char*)str.data, (i32)str.len, alignment, dn_color_to_nk_color(color));
+}
+
+void nk_dn_string_wrap_colored(nk_context* nk, dn_string_t str, dn_color_t color) {
+  nk_text_wrap_colored(nk, (char*)str.data, (i32)str.len, dn_color_to_nk_color(color));
 }
 
 void nk_edit_dn_string(struct nk_context* nk, nk_flags flags, dn_string_t* buffer, u32 max_len, nk_plugin_filter filter) {
@@ -1547,7 +1552,10 @@ void* dn_bump_allocator_on_alloc(dn_allocator_t* allocator, dn_allocator_mode_t 
 	dn_bump_allocator_t* bump = (dn_bump_allocator_t*)allocator;
   switch (mode) {
     case DN_ALLOCATOR_MODE_ALLOC: {
-      DN_ASSERT(bump->bytes_used + size <= bump->capacity);
+      if (bump->bytes_used + size > bump->capacity) {
+        DN_LOG("overflow: bytes used = %d, requested size = %d", bump->bytes_used, size);
+        DN_ASSERT(bump->bytes_used + size <= bump->capacity);
+      }
 
       u8* memory_block = bump->buffer + bump->bytes_used;
       gs_hash_table_insert(bump->allocations, bump->bytes_used, size);

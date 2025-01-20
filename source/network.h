@@ -66,21 +66,28 @@ typedef struct {
 //////////////////
 typedef enum {
     SP_NET_MATCH_EVENT_KIND_NONE,
+    SP_NET_MATCH_EVENT_KIND_FOUND_OPPONENT,
     SP_NET_MATCH_EVENT_KIND_BEGIN,
     SP_NET_MATCH_EVENT_KIND_SYNC,
     SP_NET_MATCH_EVENT_KIND_ACTION_RESULT,
 } sp_net_match_event_kind_t;
 
 typedef struct {
+  sp_token_t token;
   sp_match_action_t action;
   sp_match_action_result_t result;
 } sp_net_match_action_event_t;
 
 typedef struct {
+  sp_username_t username;
+  sp_match_player_id_t your_match_id;
+} sp_net_match_found_opponent_event_t;
+
+typedef struct {
   sp_net_match_event_kind_t kind;
 
   union {
-    sp_username_t username;
+    sp_net_match_found_opponent_event_t found;
     sp_match_data_t state;
     sp_net_match_action_event_t action;
   };

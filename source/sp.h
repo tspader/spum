@@ -147,7 +147,11 @@ sp_match_data_t sp_sample_match = {
         .hp = 30
       },
       .bench = { 
-        { .card = SP_CARD_BULBASAUR, .hp = 60 }, 
+        { 
+          .card = SP_CARD_BULBASAUR, 
+          .hp = 60, 
+          .energy = { SP_POKEMON_TYPE_GRASS, SP_POKEMON_TYPE_GRASS } 
+        }, 
       },
       .hand = { 
           SP_CARD_BULBASAUR, 
@@ -165,10 +169,15 @@ sp_match_data_t sp_sample_match = {
     {
       .active = {
         .card = SP_CARD_WEEDLE,
-        .hp = 50
+        .hp = 50,
+        .energy = { SP_POKEMON_TYPE_FIRE, SP_POKEMON_TYPE_GRASS }
       },            
       .bench = { 
-        { .card = SP_CARD_WEEDLE, .hp = 40 }, 
+        { 
+          .card = SP_CARD_WEEDLE, 
+          .hp = 40, 
+          .energy = { SP_POKEMON_TYPE_FIRE } 
+        }, 
       },
       .hand = { 
           SP_CARD_WEEDLE, 
