@@ -41,13 +41,14 @@ typedef struct {
 } sp_server_t;
 sp_server_t sp_server;
 
-void sp_server_init();
-void sp_server_queue_response(sp_session_t* session, sp_net_padded_response_t* response);
-void sp_server_process_request(sp_session_t* session, sp_net_request_t* request);
-void sp_server_sync_match(sp_server_match_t* match);
-sp_session_t* sp_server_find_player_session(sp_server_match_t* match, sp_token_t token);
-int sp_protocol_handler(sp_ws_instance_t* instance, sp_ws_event_t event, void* userdata, void* data, size_t len);
-int sp_http_protocol_handler(struct lws* websocket, enum lws_callback_reasons event, void* userdata, void* data, size_t len);
+void          sp_server_init();
+void          sp_server_queue_response(sp_session_t* session, sp_net_padded_response_t* response);
+void          sp_server_process_request(sp_session_t* session, sp_net_request_t* request);
+void          sp_server_sync_match(sp_server_match_t* match);
+void          sp_server_finish_match_setup(sp_server_match_t* match);
+sp_session_t* sp_server_find_session_by_player(sp_server_match_t* match, sp_player_t* player);
+int           sp_protocol_handler(sp_ws_instance_t* instance, sp_ws_event_t event, void* userdata, void* data, size_t len);
+int           sp_http_protocol_handler(struct lws* websocket, enum lws_callback_reasons event, void* userdata, void* data, size_t len);
 
 sp_token_t sp_gen_token();
 
@@ -223,7 +224,7 @@ void sp_server_process_request(sp_session_t* session, sp_net_request_t* request)
        .payload = {
          .op = SP_OPCODE_MATCH_EVENT,
          .match_event = (sp_net_match_event_t){
-          .kind = SP_NET_MATCH_EVENT_KIND_BEGIN,
+          .kind = SP_NET_MATCH_EVENT_KIND_INITIAL_SYNC,
           .state = match->state
          }
        }};
@@ -238,8 +239,10 @@ void sp_server_process_request(sp_session_t* session, sp_net_request_t* request)
       lwsl_user("SP_OPCODE_CLIENT_MATCH_ACTION");
 
       sp_server_match_t* server_match = dn_pool_at(sp_server_match_t, &sp_server.matches, session->match);
+      DN_ASSERT(server_match);
+
       sp_match_t* match = &server_match->state;
-      DN_ASSERT(match);
+      sp_match_state_t old_match_state = match->state;
 
       sp_player_t* player = sp_match_find_player(match, session->match_id);
 
@@ -250,36 +253,49 @@ void sp_server_process_request(sp_session_t* session, sp_net_request_t* request)
           .match_event = {
             .kind = SP_NET_MATCH_EVENT_KIND_ACTION_RESULT,
             .action = {
-            .token = session->token,
-            .action = request->match_action.action,
-            .result = result
+              .token = session->token,
+              .action = request->match_action.action,
+              .result = result
       }}}};
       sp_server_queue_response(server_match->sessions[0], &response);
       sp_server_queue_response(server_match->sessions[1], &response);
       sp_server_sync_match(server_match);
 
-      if (match->state == SP_MATCH_STATE_DONE) {
-        dn_pool_handle_t handle = session->match;
+      switch (match->state) {
+        case SP_MATCH_STATE_DONE: {
+          dn_pool_handle_t handle = session->match;
 
-        sp_session_t** sessions = server_match->sessions;
-        dn_for(index, 2) {
-          sessions[index]->match = dn_pool_invalid_handle();
-          sessions[index]->match_id = SP_PLAYER_ID_NONE;
+          sp_session_t** sessions = server_match->sessions;
+          dn_for(index, 2) {
+            sessions[index]->match = dn_pool_invalid_handle();
+            sessions[index]->match_id = SP_PLAYER_ID_NONE;
 
-          sp_net_padded_response_t response = {
-            .payload = {
-              .op = SP_OPCODE_MATCH_EVENT,
-              .match_event = {
-                .kind = SP_NET_MATCH_EVENT_KIND_GAME_OVER,
-                .game_over = {
-                  .winner = match->winner
-                }
-              }}};
-          sp_server_queue_response(sessions[index], &response);
-        };
+            sp_net_padded_response_t response = {
+              .payload = {
+                .op = SP_OPCODE_MATCH_EVENT,
+                .match_event = {
+                  .kind = SP_NET_MATCH_EVENT_KIND_GAME_OVER,
+                  .game_over = {
+                    .winner = match->winner
+                  }
+                }}};
+            sp_server_queue_response(sessions[index], &response);
+          };
 
-        dn_pool_remove(&sp_server.matches, handle);
+          dn_pool_remove(&sp_server.matches, handle);
+          break;
+        }
+        case SP_MATCH_STATE_TURN: {
+          if (old_match_state == SP_MATCH_STATE_SETUP) {
+            sp_server_finish_match_setup(server_match);
+          }
+          break;
+        }
+        default: {
+          break;
+        }
       }
+
       break;
     }
     case SP_OPCODE_NONE: {
@@ -303,14 +319,59 @@ void sp_server_sync_match(sp_server_match_t* match) {
   sp_server_queue_response(match->sessions[1], &message);
 }
 
-sp_session_t* sp_server_find_player(sp_server_match_t* match, sp_token_t token) {
+void sp_server_finish_match_setup(sp_server_match_t* match) {
+  sp_session_t* sessions [2] = {
+    sp_server_find_session_by_player(match, sp_match_going_first(&match->state)),
+    sp_server_find_session_by_player(match, sp_match_going_second(&match->state))
+  };
+
+  sp_net_padded_response_t response = dn_zero_struct(sp_net_padded_response_t);
+
+  response = (sp_net_padded_response_t){
+    .payload = {
+      .op = SP_OPCODE_MATCH_EVENT,
+      .match_event = {
+        .kind = SP_NET_MATCH_EVENT_KIND_SETUP_DONE,
+  }}};
+  sp_server_queue_response(sessions[0], &response);
+  sp_server_queue_response(sessions[1], &response);
+
+  response = (sp_net_padded_response_t){
+    .payload = {
+      .op = SP_OPCODE_MATCH_EVENT,
+      .match_event = {
+        .kind = SP_NET_MATCH_EVENT_KIND_TURN_NUMBER,
+        .turn.turn_number = match->state.turn,
+  }}};
+  sp_server_queue_response(sessions[0], &response);
+  sp_server_queue_response(sessions[1], &response);
+
+  response = (sp_net_padded_response_t) {
+    .payload = {
+      .op = SP_OPCODE_MATCH_EVENT,
+      .match_event = {
+        .kind = SP_NET_MATCH_EVENT_KIND_YOUR_TURN
+  }}};
+  sp_server_queue_response(sessions[0], &response);
+}
+
+sp_session_t* sp_server_find_session_by_player(sp_server_match_t* match, sp_player_t* player) {
+  dn_for(index, 2) {
+    if (match->sessions[index]->match_id == player->id) {
+     return match->sessions[index];
+    }
+  }
+
+  return NULL;
+}
+
+sp_session_t* sp_server_find_player_by_token(sp_server_match_t* match, sp_token_t token) {
   dn_for(index, 2) {
     if (match->sessions[index]->token == token) {
      return match->sessions[index];
     }
   }
 
-  DN_UNREACHABLE_MESSAGE("sp_server_find_player");
   return NULL;
 }
 

@@ -22,6 +22,15 @@
       },
       "problemMatcher": []
     },
+		{
+      "type": "shell",
+      "label": "build spum-cli",
+      "command": "${workspaceFolder}/build/build-cli.sh",
+      "options": {
+        "cwd": "${workspaceFolder}/build",
+      },
+      "problemMatcher": []
+    },
     {
       "label": "spum web server",
       "type": "process",

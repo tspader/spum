@@ -68,8 +68,11 @@ typedef struct {
 typedef enum {
   SP_NET_MATCH_EVENT_KIND_NONE,
   SP_NET_MATCH_EVENT_KIND_FOUND_OPPONENT,
-  SP_NET_MATCH_EVENT_KIND_BEGIN,
+  SP_NET_MATCH_EVENT_KIND_INITIAL_SYNC,
   SP_NET_MATCH_EVENT_KIND_SYNC,
+  SP_NET_MATCH_EVENT_KIND_SETUP_DONE,
+  SP_NET_MATCH_EVENT_KIND_YOUR_TURN,
+  SP_NET_MATCH_EVENT_KIND_TURN_NUMBER,
   SP_NET_MATCH_EVENT_KIND_ACTION_RESULT,
   SP_NET_MATCH_EVENT_KIND_GAME_OVER,
 } sp_net_match_event_kind_t;
@@ -90,6 +93,10 @@ typedef struct {
 } sp_net_match_game_over_event_t;
 
 typedef struct {
+	u32 turn_number;
+} sp_net_match_turn_number_event_t;
+
+typedef struct {
  sp_net_match_event_kind_t kind;
 
  union {
@@ -97,6 +104,7 @@ typedef struct {
   sp_match_t state;
   sp_net_match_action_event_t action;
  	sp_net_match_game_over_event_t game_over;
+	sp_net_match_turn_number_event_t turn;
  };
 } sp_net_match_event_t;
 

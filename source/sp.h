@@ -142,40 +142,40 @@ sp_match_t sp_sample_match = {
  .order_flip = SP_RNG_FLIP_HEADS,
  .players = {
   {
-		.id = SP_PLAYER_ID_0,
-   .active = {
-    .card = SP_CARD_BULBASAUR,
-    .hp = 30
-   },
-   .bench = { 
-    { 
-     .card = SP_CARD_BULBASAUR, 
-     .hp = 60, 
-     .energy = { SP_POKEMON_TYPE_GRASS, SP_POKEMON_TYPE_GRASS } 
-    }, 
-   },
-   .hand = { 
-     SP_CARD_BULBASAUR, 
-     SP_CARD_ODDISH, 
-     SP_CARD_WEEDLE,
-     SP_CARD_ODDISH, 
-     SP_CARD_BULBASAUR 
-   },
-   .discard = dn_zero_initialize(),
-	 .deck = { 
-			SP_CARD_BULBASAUR, SP_CARD_BULBASAUR, SP_CARD_BULBASAUR, SP_CARD_BULBASAUR, 
-			SP_CARD_IVYSAUR, SP_CARD_IVYSAUR, SP_CARD_IVYSAUR, SP_CARD_IVYSAUR, 
-			SP_CARD_VENUSAUR, SP_CARD_VENUSAUR, SP_CARD_VENUSAUR, SP_CARD_VENUSAUR, 
-			SP_CARD_VENUSAUR_EX, SP_CARD_VENUSAUR_EX, SP_CARD_VENUSAUR_EX,  
-		},
+    .id = SP_PLAYER_ID_0,
+    .active = {
+      .card = SP_CARD_BULBASAUR,
+      .hp = 30
+    },
+    .bench = { 
+      { 
+        .card = SP_CARD_BULBASAUR, 
+        .hp = 60, 
+        .energy = { SP_POKEMON_TYPE_GRASS, SP_POKEMON_TYPE_GRASS } 
+      }, 
+    },
+    .hand = { 
+      SP_CARD_BULBASAUR, 
+      SP_CARD_ODDISH, 
+      SP_CARD_WEEDLE,
+      SP_CARD_ODDISH, 
+      SP_CARD_BULBASAUR 
+    },
+    .discard = dn_zero_initialize(),
+    .deck = { 
+      SP_CARD_BULBASAUR, SP_CARD_BULBASAUR, SP_CARD_BULBASAUR, SP_CARD_BULBASAUR, 
+      SP_CARD_IVYSAUR, SP_CARD_IVYSAUR, SP_CARD_IVYSAUR, SP_CARD_IVYSAUR, 
+      SP_CARD_VENUSAUR, SP_CARD_VENUSAUR, SP_CARD_VENUSAUR, SP_CARD_VENUSAUR, 
+      SP_CARD_VENUSAUR_EX, SP_CARD_VENUSAUR_EX, SP_CARD_VENUSAUR_EX,  
+    },
    .energy = { 
-     SP_POKEMON_TYPE_GRASS, 
-     SP_POKEMON_TYPE_GRASS 
+      SP_POKEMON_TYPE_GRASS, 
+      SP_POKEMON_TYPE_GRASS 
    },
   },
   {
-		.id = SP_PLAYER_ID_1,
-	.active = {
+    .id = SP_PLAYER_ID_1,
+  .active = {
     .card = SP_CARD_WEEDLE,
     .hp = 50,
     .energy = { SP_POKEMON_TYPE_FIRE, SP_POKEMON_TYPE_GRASS }
@@ -195,12 +195,12 @@ sp_match_t sp_sample_match = {
      SP_CARD_ODDISH 
    },
    .discard = dn_zero_initialize(),
-		.deck = { 
-			SP_CARD_BULBASAUR, SP_CARD_BULBASAUR, SP_CARD_BULBASAUR, SP_CARD_BULBASAUR, 
-			SP_CARD_IVYSAUR, SP_CARD_IVYSAUR, SP_CARD_IVYSAUR, SP_CARD_IVYSAUR, 
-			SP_CARD_VENUSAUR, SP_CARD_VENUSAUR, SP_CARD_VENUSAUR, SP_CARD_VENUSAUR, 
-			SP_CARD_VENUSAUR_EX, SP_CARD_VENUSAUR_EX, SP_CARD_VENUSAUR_EX,  
-		},
+    .deck = { 
+      SP_CARD_BULBASAUR, SP_CARD_BULBASAUR, SP_CARD_BULBASAUR, SP_CARD_BULBASAUR, 
+      SP_CARD_IVYSAUR, SP_CARD_IVYSAUR, SP_CARD_IVYSAUR, SP_CARD_IVYSAUR, 
+      SP_CARD_VENUSAUR, SP_CARD_VENUSAUR, SP_CARD_VENUSAUR, SP_CARD_VENUSAUR, 
+      SP_CARD_VENUSAUR_EX, SP_CARD_VENUSAUR_EX, SP_CARD_VENUSAUR_EX,  
+    },
    .energy = { 
      SP_POKEMON_TYPE_FIRE, 
      SP_POKEMON_TYPE_FIRE 
@@ -218,94 +218,113 @@ sp_match_t sp_sample_match = {
 #include "network.h"
 
 void sp_test() {
- dn_test_suite_t suite = {
-  .name = dn_string_literal("sp_simulator")
- };
- dn_test_begin_suite(&suite);
+  dn_test_suite_t suite = {
+    .name = dn_string_literal("sp_simulator")
+  };
+  dn_test_begin_suite(&suite);
 
- dn_test_begin(dn_string_literal("sp_card_iter"));
-  sp_deck_t deck = sp_deck_gen_random();
+  dn_test_begin(dn_string_literal("sp_card_iter")); {
+    sp_deck_t deck = sp_deck_gen_random();
 
-  u32 num_cards = 0;
-  sp_for_card(it, deck.cards) {
-   num_cards++;
+    u32 num_cards = 0;
+    sp_for_card(it, deck.cards) {
+      num_cards++;
+    }
+    dn_test_assert(num_cards == 20);
   }
-  dn_test_assert(num_cards == 20);
- dn_test_end();
+  dn_test_end();
 
- dn_test_begin(dn_string_literal("sp_player_shuffle")); {
-  sp_player_t player, shuffled_player = dn_zero_struct(sp_player_t);
-  sp_player_init(&player, &deck);
-  sp_player_init(&shuffled_player, &deck);
+  dn_test_begin(dn_string_literal("sp_player_shuffle")); {
+    sp_deck_t deck = sp_deck_gen_random();
 
-  sp_player_shuffle(&shuffled_player);
-  dn_test_assert(!dn_os_is_memory_equal(player.deck, shuffled_player.deck, sizeof(player.deck)));
- }
- dn_test_end();
+    sp_player_t player, shuffled_player = dn_zero_struct(sp_player_t);
+    sp_player_init(&player, &deck);
+    sp_player_init(&shuffled_player, &deck);
 
- dn_test_begin(dn_string_literal("sp_player_draw")); {
-  sp_player_t player = dn_zero_struct(sp_player_t);
-  sp_player_init(&player, &deck);
-
-  sp_card_id_t drawn_card = player.deck[0];
-  sp_card_id_t deck_top = player.deck[1];
-
-  sp_player_draw(&player);
-
-  dn_test_assert(player.hand[0] == drawn_card);
-  dn_test_assert(player.deck[0] == deck_top);
-  dn_test_assert(player.deck[SP_DECK_MAX_INDEX] == SP_CARD_NONE);
-  dn_test_assert(sp_player_hand_size(&player) == 1);
-  dn_test_assert(sp_player_deck_size(&player) == 19);
- }
- dn_test_end();
-
- dn_test_begin(dn_string_literal("sp_player_remove_from_pile")); {
-  sp_player_t player = dn_zero_struct(sp_player_t);
-  sp_player_init(&player, &deck);
-  dn_os_memory_copy(
-   dn_arr_lval(sp_card_id_t, SP_CARD_BULBASAUR, SP_CARD_IVYSAUR, SP_CARD_VENUSAUR, SP_CARD_VENUSAUR_EX, SP_CARD_WEEDLE), 
-   player.hand,
-   sizeof(sp_card_id_t) * 5);
-
-  sp_card_id_t hand [5] = dn_zero_initialize();
-  dn_for(index, 5) {
-   hand[index] = player.hand[index];
+    sp_player_shuffle(&shuffled_player);
+    dn_test_assert(!dn_os_is_memory_equal(player.deck, shuffled_player.deck, sizeof(player.deck)));
   }
+  dn_test_end();
 
-  sp_player_remove_from_hand(&player, hand[0]);
-  dn_test_assert(sp_player_hand_size(&player) == 4);
-  dn_test_assert(player.hand[0] == hand[1]);
-  dn_test_assert(player.hand[1] == hand[2]);
-  dn_test_assert(player.hand[2] == hand[3]);
-  dn_test_assert(player.hand[3] == hand[4]);
-  dn_test_assert(player.hand[4] == SP_CARD_NONE);
+  dn_test_begin(dn_string_literal("sp_player_draw")); {
+    sp_deck_t deck = sp_deck_gen_random();
 
-  sp_player_remove_from_hand(&player, hand[3]);
-  dn_test_assert(sp_player_hand_size(&player) == 3);
-  dn_test_assert(player.hand[0] == hand[1]);
-  dn_test_assert(player.hand[1] == hand[2]);
-  dn_test_assert(player.hand[2] == hand[4]);
-  dn_test_assert(player.hand[3] == SP_CARD_NONE);
-  dn_test_assert(player.hand[4] == SP_CARD_NONE);
+    sp_player_t player = dn_zero_struct(sp_player_t);
+    sp_player_init(&player, &deck);
 
- }
- dn_test_end();
+    sp_card_id_t drawn_card = player.deck[0];
+    sp_card_id_t deck_top = player.deck[1];
 
+    sp_player_draw(&player);
 
- dn_test_begin(dn_string_literal("sp_match_init")); {
-  sp_match_t match = dn_zero_struct(sp_match_t);
-  sp_match_init(&match, (sp_deck_t [2]) { sp_deck_gen_random(), sp_deck_gen_random() });
-
-  dn_for(i, 2) {
-   dn_test_assert(sp_player_is_starting_hand_valid(&match.players[i]));
-   dn_test_assert(sp_player_hand_size(&match.players[i]) == 5);
-   dn_test_assert(sp_player_deck_size(&match.players[i]) == 15);
-   dn_test_assert(sp_player_discard_size(&match.players[i]) == 0);
+    dn_test_assert(player.hand[0] == drawn_card);
+    dn_test_assert(player.deck[0] == deck_top);
+    dn_test_assert(player.deck[SP_DECK_MAX_INDEX] == SP_CARD_NONE);
+    dn_test_assert(sp_player_hand_size(&player) == 1);
+    dn_test_assert(sp_player_deck_size(&player) == 19);
   }
+  dn_test_end();
+
+  dn_test_begin(dn_string_literal("sp_player_remove_from_pile")); {
+    sp_deck_t deck = sp_deck_gen_random();
+    
+    sp_player_t player = dn_zero_struct(sp_player_t);
+    sp_player_init(&player, &deck);
+    dn_os_memory_copy(
+      dn_arr_lval(sp_card_id_t, SP_CARD_BULBASAUR, SP_CARD_IVYSAUR, SP_CARD_VENUSAUR, SP_CARD_VENUSAUR_EX, SP_CARD_WEEDLE), 
+      player.hand,
+      sizeof(sp_card_id_t) * 5
+    );
+
+    sp_card_id_t hand [5] = dn_zero_initialize();
+    dn_for(index, 5) {
+      hand[index] = player.hand[index];
+    }
+
+    sp_player_remove_from_hand(&player, hand[0]);
+    dn_test_assert(sp_player_hand_size(&player) == 4);
+    dn_test_assert(player.hand[0] == hand[1]);
+    dn_test_assert(player.hand[1] == hand[2]);
+    dn_test_assert(player.hand[2] == hand[3]);
+    dn_test_assert(player.hand[3] == hand[4]);
+    dn_test_assert(player.hand[4] == SP_CARD_NONE);
+
+    sp_player_remove_from_hand(&player, hand[3]);
+    dn_test_assert(sp_player_hand_size(&player) == 3);
+    dn_test_assert(player.hand[0] == hand[1]);
+    dn_test_assert(player.hand[1] == hand[2]);
+    dn_test_assert(player.hand[2] == hand[4]);
+    dn_test_assert(player.hand[3] == SP_CARD_NONE);
+    dn_test_assert(player.hand[4] == SP_CARD_NONE);
+   }
+  dn_test_end();
+
+   dn_test_begin(dn_string_literal("sp_match_init")); {
+    sp_match_t match = dn_zero_struct(sp_match_t);
+      sp_match_init(&match, (sp_deck_t [2]) { sp_deck_gen_random(), sp_deck_gen_random() });
+    sp_player_t* player = &match.players[0];
+
+    player->active = (sp_field_card_t){
+      .card = SP_CARD_ODDISH,
+      .hp = 69,
+      .energy = { SP_POKEMON_TYPE_GRASS, SP_POKEMON_TYPE_FIRE }
+    };
+
+    sp_energy_count_t attached = sp_match_count_attached_energy(&match, player, SP_CARD_LOCATION_ACTIVE());
+    sp_energy_count_t required = sp_match_count_required_energy(&match, player, SP_MOVE_ODDISH_RAM);
+
+    dn_test_assert(attached.energy[SP_POKEMON_TYPE_GRASS] == 1);
+    dn_test_assert(attached.energy[SP_POKEMON_TYPE_FIRE] == 1);
+    dn_test_assert(attached.energy[SP_POKEMON_TYPE_COLORLESS] == 0);
+    dn_test_assert(attached.energy[SP_POKEMON_TYPE_NONE] == 0);
   
- }
- dn_test_end();
+    dn_test_assert(required.energy[SP_POKEMON_TYPE_GRASS] == 1);
+    dn_test_assert(required.energy[SP_POKEMON_TYPE_COLORLESS] == 0);
+    dn_test_assert(required.energy[SP_POKEMON_TYPE_FIRE] == 0);
+    dn_test_assert(required.energy[SP_POKEMON_TYPE_NONE] == 0);
+   }
+   dn_test_end();
+
 
  dn_test_end_suite();
 }

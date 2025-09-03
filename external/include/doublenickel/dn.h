@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <sys/time.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <stddef.h>
 #include <inttypes.h>
 
 //  ████████╗██╗   ██╗██████╗ ███████╗███████╗
@@ -13,10 +15,10 @@
 //     ██║      ██║   ██║     ███████╗███████║
 //     ╚═╝      ╚═╝   ╚═╝     ╚══════╝╚══════╝                              
 #ifndef DN_NO_HIJACK_NUMERIC_TYPES
-typedef int8_t   i8;
-typedef int16_t  i16;
-typedef int32_t  i32;
-typedef int64_t  i64;
+typedef int8_t   s8;
+typedef int16_t  s16;
+typedef int32_t  s32;
+typedef int64_t  s64;
 
 typedef uint8_t  u8;
 typedef uint16_t u16;
@@ -73,6 +75,7 @@ typedef char dn_asset_name_t [DN_ASSET_NAME_LEN];
 
 #define dn_align(n) __declspec(align(n))
 #define DN_ASSERT(condition) assert(condition)
+#define DN_SOFT_ASSERT(condition) DN_ASSERT(condition) // For things you want to crash in development, but fix before release (as opposed to assers which are left in release builds and, say, logged)
 #define DN_UNTESTED() DN_ASSERT(false)
 #define DN_UNREACHABLE() DN_ASSERT(false)
 #define DN_UNREACHABLE_MESSAGE(message) DN_ASSERT(false && (message))
@@ -91,6 +94,10 @@ typedef char dn_asset_name_t [DN_ASSET_NAME_LEN];
 #define dn_arr_lval(type, ...) ((type []){ __VA_ARGS__ })
 
 #define dn_swap(t, a, b) { t dn_unique_name() = (a); (a) = (b); (b) = dn_unique_name(); }
+
+#define DN_QSORT_A_FIRST -1
+#define DN_QSORT_B_FIRST 1
+#define DN_QSORT_EQUAL 0
 
 #include "gs.h"
 
@@ -152,8 +159,8 @@ typedef union {
 #endif
 
 typedef struct {
-	i32 x;
-	i32 y;
+	s32 x;
+	s32 y;
 } dn_vector2i_t;
 
 
@@ -496,7 +503,7 @@ typedef struct {
 } dn_pool_handle_t;
 
 typedef struct {
-  i32 next_free;
+  s32 next_free;
   u32 generation;
   bool occupied;
 } dn_pool_slot_t;
@@ -506,7 +513,7 @@ typedef struct {
   dn_pool_slot_t* slots;
   u32 element_size;
   u32 capacity;
-  i32 free_list;
+  s32 free_list;
 } dn_pool_t;
 
 #define dn_pool(t) dn_pool_t
@@ -588,9 +595,38 @@ dn_log_t dn_logger;
 DN_API void dn_log(const char* fmt, ...);
 DN_API void dn_log_flags(dn_log_flags_t flags, const char* fmt, ...);
 DN_IMP void dn_log_v(dn_log_flags_t flags, const char* fmt, va_list fmt_args);
+DN_IMP void dn_log_format_str(dn_string_t fmt, ...);
+DN_IMP void dn_log_str(dn_string_t message);
+DN_API void dn_log_builder(dn_string_builder_t builder);
+DN_IMP void dn_log_flush(dn_log_flags_t flags);
 DN_IMP void dn_log_zero();
 DN_IMP void dn_log_init();
 #define DN_LOG(fmt, ...) dn_log("%s: " fmt, __func__, __VA_ARGS__)
+
+
+//  ██╗     ██╗   ██╗ █████╗ 
+//  ██║     ██║   ██║██╔══██╗
+//  ██║     ██║   ██║███████║
+//  ██║     ██║   ██║██╔══██║
+//  ███████╗╚██████╔╝██║  ██║
+//  ╚══════╝ ╚═════╝ ╚═╝  ╚═╝
+#ifdef DN_LUA
+#ifndef LUA_VERSION
+	#error "Please include Lua before including dn.h. If you aren't using Lua, find where DN_LUA is being defined and fix it."
+#endif
+
+typedef lua_State* dn_lua_interpreter_t;
+
+typedef struct {
+	dn_lua_interpreter_t state;
+} dn_lua_t;
+dn_lua_t dn_lua;
+
+void 				dn_lua_init();
+bool 				dn_lua_script_file(dn_string_t file_path);
+const char* dn_lua_format_file_load_error(const char* error);
+s32         dn_lua_format_file_load_error_l(dn_lua_interpreter_t lua);
+#endif
 
 
 //  ████████╗███████╗███████╗████████╗██╗███╗   ██╗ ██████╗ 
@@ -766,35 +802,35 @@ dn_vector4_t dn_math_clamp4(dn_vector4_t v, float minVal, float maxVal) {
 
 #ifdef DN_NUKLEAR
 void nk_dn_string(struct nk_context* nk, dn_string_t str, nk_flags flags) {
-  nk_text(nk, (char*)str.data, (i32)str.len, flags);
+  nk_text(nk, (char*)str.data, (s32)str.len, flags);
 }
 
 void nk_dn_string_wrap(nk_context* nk, dn_string_t str) {
-  nk_text_wrap(nk, (char*)str.data, (i32)str.len);
+  nk_text_wrap(nk, (char*)str.data, (s32)str.len);
 }
 
 void nk_dn_string_colored(struct nk_context* nk, dn_string_t str, nk_flags alignment, dn_color_t color) {
-  nk_text_colored(nk, (char*)str.data, (i32)str.len, alignment, dn_color_to_nk_color(color));
+  nk_text_colored(nk, (char*)str.data, (s32)str.len, alignment, dn_color_to_nk_color(color));
 }
 
 void nk_dn_string_wrap_colored(nk_context* nk, dn_string_t str, dn_color_t color) {
-  nk_text_wrap_colored(nk, (char*)str.data, (i32)str.len, dn_color_to_nk_color(color));
+  nk_text_wrap_colored(nk, (char*)str.data, (s32)str.len, dn_color_to_nk_color(color));
 }
 
 void nk_edit_dn_string(struct nk_context* nk, nk_flags flags, dn_string_t* buffer, u32 max_len, nk_plugin_filter filter) {
-  nk_edit_string(nk, flags, (char*)buffer->data, (i32*)&buffer->len, max_len, filter);
+  nk_edit_string(nk, flags, (char*)buffer->data, (s32*)&buffer->len, max_len, filter);
 }
 
 bool nk_selectable_dn_string(nk_context* nk, dn_string_t str, nk_flags flags, nk_bool* value) {
-  return nk_selectable_text(nk, (char*)str.data, (i32)str.len, flags, value);
+  return nk_selectable_text(nk, (char*)str.data, (s32)str.len, flags, value);
 }
 
 bool nk_button_dn_string(nk_context* nk, dn_string_t str) {
-  return nk_button_text(nk, (char*)str.data, (i32)str.len);
+  return nk_button_text(nk, (char*)str.data, (s32)str.len);
 }
 
 bool nk_button_dn_string_styled(nk_context* nk, nk_style_button* style, dn_string_t str) {
-  return nk_button_text_styled(nk, style, (char*)str.data, (i32)str.len);
+  return nk_button_text_styled(nk, style, (char*)str.data, (s32)str.len);
 }
 
 nk_color dn_color_to_nk_color(dn_color_t color) {
@@ -819,6 +855,13 @@ void dn_log(const char* fmt, ...) {
 	va_end(fmt_args);
 }
 
+void dn_log_format_str(dn_string_t fmt, ...) {
+	va_list fmt_args;
+	va_start(fmt_args, fmt);
+	dn_log_v(DN_LOG_FLAG_DEFAULT, dn_string_to_cstr(fmt), fmt_args);
+	va_end(fmt_args);
+}
+
 void dn_log_flags(dn_log_flags_t flags, const char* fmt, ...) {
 	va_list fmt_args;
 	va_start(fmt_args, fmt);
@@ -839,6 +882,19 @@ void dn_log_v(dn_log_flags_t flags, const char* fmt, va_list fmt_args) {
 	
 	vsnprintf(&dn_logger.message_buffer[0], DN_LOGGER_MESSAGE_BUFFER_SIZE, fmt, fmt_args);
 	
+	dn_log_flush(flags);
+}
+
+void dn_log_str(dn_string_t message) {
+	snprintf(dn_logger.message_buffer, DN_LOGGER_MESSAGE_BUFFER_SIZE, "%.*s", message.len, message.data);
+	dn_log_flush(DN_LOG_FLAG_CONSOLE);
+}
+
+void dn_log_builder(dn_string_builder_t builder) {
+	dn_log_str(dn_string_builder_write(&builder));
+}
+
+void dn_log_flush(dn_log_flags_t flags) {
 	if (flags & DN_LOG_FLAG_CONSOLE) { 
 		printf("%s %s\n", dn_logger.preamble_buffer, dn_logger.message_buffer); 
 	}
@@ -1647,6 +1703,107 @@ void dn_allocators_update() {
 	dn_bump_allocator_clear(&dn_allocators.bump);
 }
 
+/////////
+// LUA //
+/////////
+#ifdef DN_LUA
+void dn_lua_init() {
+  dn_lua.state = luaL_newstate();
+
+  luaL_openlibs(dn_lua.state);
+}
+
+void dn_lua_pcall(dn_string_t fn) {
+	lua_pushstring(dn_lua.state, dn_string_to_cstr(fn));
+  lua_gettable(dn_lua.state, -2);
+  bool result = lua_pcall(dn_lua.state, 0, 0, 0);
+  if (result) {
+		dn_string_builder_t builder = dn_tstring_builder();
+		dn_string_builder_append_fmt(&builder, dn_string_literal("%.*s() failed; error = %s"),
+			fn.len, fn.data,
+			lua_tostring(dn_lua.state, -1)
+		);
+    dn_log_builder(builder);
+    exit(0);
+  }
+
+}
+
+bool dn_lua_script_file(dn_string_t file_path) {
+  dn_lua_interpreter_t l = dn_lua.state;
+  s32 initial_stack_size = lua_gettop(l);
+
+	dn_log_format_str(dn_string_literal("%s: scripting %.*s"), __func__, file_path.len, file_path.data);
+
+  lua_pushcfunction(l, &dn_lua_format_file_load_error_l);
+  
+	const char* file_path_cstr = dn_string_to_cstr(file_path);
+  bool result = luaL_loadfile(l, file_path_cstr);
+
+  // In all error cases, do not return early.
+  if (result) {
+    // There's a syntax error in the file. Since loadfile doesn't call the
+    // function we put on the stack, format the message manually.
+    const char* unformatted_error = lua_tostring(l, -1);
+		dn_log_format_str(dn_string_literal("%s: error loading %.*s\n%s"), 
+			__func__, 
+			file_path.len, file_path.data, 
+			dn_lua_format_file_load_error(unformatted_error)
+		);
+
+    lua_pop(l, 2);
+    goto check_stack;
+  }
+  else {
+    // The chunk compiled OK. Run it.
+    result = lua_pcall(l, 0, 0, -2);
+    
+    if (result) {
+      // There was a runtime error running the chunk.
+			const char* unformatted_error = lua_tostring(l, -1);
+			dn_log_format_str(dn_string_literal("%s: error running %.*s\n%s"), 
+				__func__, 
+				file_path.len, file_path.data, 
+				dn_lua_format_file_load_error(unformatted_error)
+			);
+
+      lua_pop(l, 2);
+      goto check_stack;
+    }
+
+    // The chunk loaded successfully!
+    lua_pop(l, 1);
+    goto check_stack;
+  }
+
+ check_stack:
+  s32 final_stack_size = lua_gettop(l);
+  assert(initial_stack_size == final_stack_size);
+  return !result;
+}
+
+const char* dn_lua_format_file_load_error(const char* error) {
+  static char buffer [2048];
+  const char* fmt = "  %s";
+  snprintf(&buffer[0], 2048, fmt, error);
+  
+  return &buffer[0];
+}
+
+s32 dn_lua_format_file_load_error_l(dn_lua_interpreter_t l) {
+  const char* error = lua_tostring(dn_lua.state, 1);
+  error = dn_lua_format_file_load_error(error);
+  
+  lua_pop(dn_lua.state, 1);
+  lua_pushstring(dn_lua.state, error);
+  return 1;
+}
+#endif
+
+
+//////////
+// TEST //
+//////////
 void dn_test_context_init(dn_test_context_t* context) {
   dn_dynamic_array_init(&context->assertions, sizeof(dn_assertion_t), &dn_allocators.bump.allocator);
 }
@@ -1888,6 +2045,10 @@ void dn_test_run_internal() {
 void dn_init() {
   dn_allocators_init();
   dn_log_init();
+
+	#ifdef DN_LUA
+	dn_lua_init();
+	#endif
 
   #ifdef DN_RUN_INTERNAL_TESTS
   dn_test_run_internal();

@@ -18,10 +18,23 @@ sp_rng_t sp_rng;
 ///////////////
 // GAME DATA //
 ///////////////
+#define SP_POKEMON_MAX_MOVES 2
+#define SP_POKEMON_MOVE_MAX_ENERGY 5
+#define SP_DECK_SIZE 20
+#define SP_DECK_MAX_INDEX (SP_DECK_SIZE - 1)
+#define SP_DISCARD_SIZE 20
+#define SP_FIRST_HAND_SIZE 5
+#define SP_HAND_SIZE 10
+#define SP_DECK_MAX_ENERGY 3
+#define SP_BENCH_SIZE 3
+#define SP_NUM_PLAYERS 2
+
 typedef enum {
   SP_POKEMON_TYPE_NONE,
+  SP_POKEMON_TYPE_COLORLESS,
   SP_POKEMON_TYPE_GRASS,
   SP_POKEMON_TYPE_FIRE,
+  SP_POKEMON_TYPE_COUNT,
 } sp_pokemon_type_t;
 
 typedef enum {
@@ -42,7 +55,14 @@ typedef enum {
   SP_MOVE_BULBASAUR_VINE_WHIP,
   SP_MOVE_WEEDLE_STING,
   SP_MOVE_ODDISH_RAM,
-} sp_pokemon_move_t;
+} sp_move_id_t;
+
+typedef struct {
+  sp_move_id_t id;
+  u32 damage;
+  sp_pokemon_type_t energy [SP_POKEMON_MOVE_MAX_ENERGY];
+  dn_string_t name;
+} sp_move_t;
 
 typedef enum {
   SP_ABILITY_NONE,
@@ -54,7 +74,7 @@ typedef struct {
   sp_pokemon_ex_t ex;
   sp_pokemon_type_t type;
   sp_pokemon_stage_t stage;
-  sp_pokemon_move_t moves [2];
+  sp_move_id_t moves [2];
   sp_pokemon_ability_t ability;
   u32 hp;
 } sp_pokemon_t;
@@ -80,6 +100,7 @@ typedef enum {
   SP_CARD_ODDISH,
   SP_CARD_POTION,
   SP_CARD_PROFESSORS_RESEARCH,
+  SP_CARD_COUNT
 } sp_card_id_t;
 
 typedef enum {
@@ -96,15 +117,6 @@ typedef struct {
   u32 set_id;
   sp_pokemon_t pokemon;
 } sp_card_t;
-
-#define SP_DECK_SIZE 20
-#define SP_DECK_MAX_INDEX (SP_DECK_SIZE - 1)
-#define SP_DISCARD_SIZE 20
-#define SP_FIRST_HAND_SIZE 5
-#define SP_HAND_SIZE 10
-#define SP_DECK_MAX_ENERGY 3
-#define SP_BENCH_SIZE 3
-#define SP_NUM_PLAYERS 2
 
 typedef struct {
   sp_card_id_t cards [SP_DECK_SIZE];
@@ -127,7 +139,7 @@ typedef struct {
 typedef enum {
   SP_MATCH_STATE_INIT,
   SP_MATCH_STATE_SETUP,
-  SP_MATCH_STATE_TURN_IDLE,
+  SP_MATCH_STATE_TURN,
   SP_MATCH_STATE_DONE,
 } sp_match_state_t;
 
@@ -152,10 +164,11 @@ typedef enum {
 } sp_match_player_id_t;
 
 typedef enum {
- SP_PLAYER_MATCH_STATE_NONE,
- SP_PLAYER_MATCH_STATE_READY,
- SP_PLAYER_MATCH_STATE_WAIT,
-} sp_player_match_state_t;
+ SP_PLAYER_STATE_NONE,
+ SP_PLAYER_STATE_SETUP,
+ SP_PLAYER_STATE_READY,
+ SP_PLAYER_STATE_WAIT,
+} sp_player_state_t;
 
 #define SP_MAX_ATTACHED_ENERGY 16
 typedef struct {
@@ -169,10 +182,16 @@ typedef struct {
   u32 slot;
   sp_match_player_id_t player;
 } sp_card_location_t;
+#define SP_CARD_LOCATION_ACTIVE()    (sp_card_location_t) { .pile = SP_CARD_PILE_ACTIVE }
+#define SP_CARD_LOCATION_BENCH(SLOT) (sp_card_location_t) { .pile = SP_CARD_PILE_BENCH, .slot = SLOT }
+
+typedef struct {
+	u32 energy [SP_POKEMON_TYPE_COUNT];
+} sp_energy_count_t;
 
 typedef struct {
   sp_match_player_id_t id;
-  sp_player_match_state_t match_state;
+  sp_player_state_t state;
   sp_deck_t deck_list;
   sp_card_id_t deck [SP_DECK_SIZE];
   sp_card_id_t hand [SP_HAND_SIZE];
@@ -188,25 +207,31 @@ typedef struct {
   sp_match_state_t state;
   sp_rng_flip_t order_flip;
 	sp_match_player_id_t winner;
+	u32 turn;
   sp_player_t players [2];
 } sp_match_t;
 
 typedef struct {
   sp_card_id_t* cards;
   u32 max_cards;
-  i32 index;
+  s32 index;
 } sp_card_iter_t;
 
 
+// MATCH ACTIONS
 typedef enum {
   SP_MATCH_ACTION_NONE,
   SP_MATCH_ACTION_CONCEDE,
-  SP_MATCH_ACTION_SETUP,
+  SP_MATCH_ACTION_SETUP_PLAY_BASIC,
   SP_MATCH_ACTION_SETUP_RESET,
+  SP_MATCH_ACTION_SETUP_READY,
+  SP_MATCH_ACTION_PLAY_BASIC,
+  SP_MATCH_ACTION_ATTACK,
   SP_MATCH_ACTION_ATTACH_BASIC_ENERGY,
 } sp_match_action_kind_t;
 
 typedef enum {
+  SP_MATCH_ACTION_STATUS_NONE,
   SP_MATCH_ACTION_STATUS_OK,
   SP_MATCH_ACTION_STATUS_ERROR
 } sp_match_action_status_t;
@@ -216,29 +241,49 @@ typedef enum {
 
   SP_MATCH_ACTION_RESULT_GAME_OVER,
   SP_MATCH_ACTION_RESULT_SETUP_RESET,
-  SP_MATCH_ACTION_RESULT_SETUP_PLAY_BASIC,
+  SP_MATCH_ACTION_RESULT_PLAY_BASIC,
+  SP_MATCH_ACTION_RESULT_ATTACK,
 
-  SP_MATCH_ACTION_RESULT_NOT_YOUR_TURN,
+  SP_MATCH_ACTION_RESULT_INCORRECT_MATCH_STATE,
+  SP_MATCH_ACTION_RESULT_INCORRECT_PLAYER_STATE,
   SP_MATCH_ACTION_RESULT_SLOT_OCCUPIED,
 } sp_match_action_result_kind_t;
 
 typedef struct {
   sp_card_location_t location;
   sp_card_id_t card;
-} sp_match_action_setup_data_t;
+} sp_match_action_play_basic_data_t;
+
+typedef struct {
+  sp_card_location_t attacker;
+  sp_card_location_t target;
+	sp_move_id_t move;
+} sp_match_action_attack_data_t;
 
 typedef struct {
   sp_match_action_kind_t kind;
 
   union {
-    sp_match_action_setup_data_t setup;
+    sp_match_action_play_basic_data_t play_basic;
+		sp_match_action_attack_data_t attack;
   };
 } sp_match_action_t;
+
+// MATCH ACTION RESULTS
+typedef struct {
+  u32 damage;
+  bool weakness;
+  bool knockout;
+} sp_match_action_attack_result_t;
 
 typedef struct {
   sp_match_action_status_t status;
   sp_match_action_result_kind_t kind;
   sp_match_player_id_t player;
+
+  union {
+    sp_match_action_attack_result_t attack;
+  };
 } sp_match_action_result_t;
 
 
@@ -254,15 +299,18 @@ void                                sp_match_update(sp_match_t* match);
 bool                                sp_match_is_player_first(sp_match_t* match, sp_player_t* player);
 sp_turn_order_t                     sp_match_turn_order(sp_match_t* match, sp_player_t* player);
 dn_dynamic_array(sp_match_action_t) sp_match_calc_all_actions(sp_match_t* match, sp_player_t* player, sp_card_location_t location);
-dn_dynamic_array(sp_match_action_t) sp_match_calc_card_actions(sp_match_t* match, sp_player_t* player, sp_card_location_t location);
-dn_dynamic_array(sp_match_action_t) sp_match_calc_hand_actions(sp_match_t* match, sp_player_t* player, sp_card_location_t location);
-dn_dynamic_array(sp_match_action_t) sp_match_calc_field_actions(sp_match_t* match, sp_player_t* player, sp_card_location_t location);
-dn_dynamic_array(sp_match_action_t) sp_match_calc_other_actions(sp_match_t* match, sp_player_t* player);
 sp_match_action_result_t            sp_match_process_action(sp_match_t* match, sp_player_t* player, sp_match_action_t* action);
 sp_player_t*                        sp_match_find_player(sp_match_t* match, sp_match_player_id_t id);
 sp_player_t*                        sp_match_find_opponent(sp_match_t* match, sp_match_player_id_t id);
 sp_field_card_t*                    sp_match_find_field_card(sp_match_t* match, sp_card_location_t location);
 sp_card_id_t                        sp_match_find_card(sp_match_t* match, sp_card_location_t location);
+sp_player_t*                        sp_match_going_first(sp_match_t* match);
+sp_player_t*                        sp_match_going_second(sp_match_t* match);
+bool 																sp_match_validate_attack(sp_match_t* match, sp_player_t* player, sp_card_location_t location, sp_move_id_t move);
+bool 																sp_match_validate_attack_exists(sp_match_t* match, sp_player_t* player, sp_card_location_t location, sp_move_id_t move);
+bool 																sp_match_validate_attack_energy(sp_match_t* match, sp_player_t* player, sp_card_location_t location, sp_move_id_t move);
+sp_energy_count_t 							 		sp_match_count_attached_energy(sp_match_t* match, sp_player_t* player, sp_card_location_t location);
+sp_energy_count_t 							 		sp_match_count_required_energy(sp_match_t* match, sp_player_t* player, sp_move_id_t move);
 
 void                                sp_player_init(sp_player_t* player, sp_deck_t* deck);
 void                                sp_player_shuffle(sp_player_t* player);
@@ -272,6 +320,7 @@ u32                                 sp_player_hand_size(sp_player_t* player);
 u32                                 sp_player_discard_size(sp_player_t* player);
 void                                sp_player_draw(sp_player_t* player);
 void                                sp_player_draw_n(sp_player_t* player, u32 num_cards);
+void                                sp_player_draw_opening_hand(sp_player_t* player);
 bool                                sp_player_is_starting_hand_valid(sp_player_t* player);
 void                                sp_player_generate_energy(sp_player_t* player);
 sp_card_id_t                        sp_player_find_card(sp_player_t* player, sp_card_location_t location);
@@ -283,19 +332,24 @@ void                                sp_player_remove_from_hand(sp_player_t* play
 void                                sp_player_add_to_pile(sp_player_t* player, sp_card_id_t* pile, u32 pile_size, sp_card_id_t card);
 void                                sp_player_add_to_hand(sp_player_t* player, sp_card_id_t card);
 void                                sp_player_play_card_to_field(sp_player_t* player, sp_card_id_t card, sp_card_location_t slot);
+bool 																sp_player_is_actionable(sp_player_t* player);
               
 sp_deck_count_t                     sp_deck_count(sp_deck_t* deck);
+sp_deck_count_t 										sp_deck_count_from_pile(sp_card_id_t* cards, u32 num_cards);
 sp_deck_count_item_t*               sp_deck_count_add(sp_deck_count_t* count, sp_card_id_t card);
 sp_deck_count_item_t*               sp_deck_count_find_item(sp_deck_count_t* count, sp_card_id_t card);
 u32                                 sp_deck_count_find(sp_deck_count_t* count, sp_card_id_t card);
 void                                sp_deck_count_remove_cards(sp_deck_count_t* count, sp_card_id_t* cards, u32 num_cards);
 void                                sp_deck_count_remove_active_cards(sp_deck_count_t* count, sp_field_card_t* cards, u32 num_cards);
+s32                                 sp_deck_count_sort_kernel_alphabetical(const void* a, const void* b);
 void                                sp_deck_print(sp_deck_t* deck);
 void                                sp_deck_print_ordered(sp_deck_t* deck);
 sp_deck_t                           sp_deck_gen_random();
               
 sp_card_t*                          sp_find_card(sp_card_id_t card);
+sp_pokemon_t*                       sp_find_pokemon(sp_card_id_t card);
 dn_string_t                         sp_find_card_name(sp_card_id_t card);
+sp_move_t*												  sp_find_move(sp_move_id_t id);
 dn_string_t                         sp_card_set_to_string(sp_card_set_t set);
 dn_string_t                         sp_card_set_to_short_string(sp_card_set_t set);
 sp_card_iter_t                      sp_card_iter_forward(sp_card_id_t* cards, u32 max_cards);
@@ -315,22 +369,8 @@ sp_card_id_t*                       sp_card_iter_get_ptr(sp_card_iter_t* it);
 //////////
 #define SP_UNIMPLEMENTED_POKEMON(card) dn_zero_initialize()
 sp_card_t sp_cards [] = {
-  {
-    .id = SP_CARD_NONE,
-    .kind = SP_CARD_KIND_NONE,
-    .set = SP_CARD_SET_NONE,
-    .set_id = 0,
-    .pokemon = {
-      .name = dn_string_literal("None"),
-      .ex = SP_POKEMON_EX_NONE,
-      .type = SP_POKEMON_TYPE_NONE,
-      .stage = SP_POKEMON_STAGE_NONE,
-      .moves = {},
-      .ability = SP_ABILITY_NONE,
-      .hp = 0
-    }
-  },
-  {
+  [SP_CARD_NONE] = SP_UNIMPLEMENTED_POKEMON(),
+  [SP_CARD_BULBASAUR] = {
     .id = SP_CARD_BULBASAUR,
     .kind = SP_CARD_KIND_POKEMON,
     .set = SP_CARD_SET_GENETIC_APEX,
@@ -353,7 +393,7 @@ sp_card_t sp_cards [] = {
   SP_UNIMPLEMENTED_POKEMON(SP_CARD_CATERPIE),
   SP_UNIMPLEMENTED_POKEMON(SP_CARD_METAPOD),
   SP_UNIMPLEMENTED_POKEMON(SP_CARD_BUTTERFREE),
-  {
+  [SP_CARD_WEEDLE] = {
     .id = SP_CARD_WEEDLE,
     .kind = SP_CARD_KIND_POKEMON,
     .set = SP_CARD_SET_GENETIC_APEX,
@@ -372,7 +412,7 @@ sp_card_t sp_cards [] = {
   },
   SP_UNIMPLEMENTED_POKEMON(SP_CARD_KAKUNA),
   SP_UNIMPLEMENTED_POKEMON(SP_CARD_BEEDRILL),
-  {
+  [SP_CARD_ODDISH] = {
     .id = SP_CARD_ODDISH,
     .kind = SP_CARD_KIND_POKEMON,
     .set = SP_CARD_SET_GENETIC_APEX,
@@ -391,6 +431,21 @@ sp_card_t sp_cards [] = {
   }
 };
 
+#define SP_UNIMPLEMENTED_MOVE(move) dn_zero_initialize()
+#define SP_DEFINE_MOVE(ID, NAME, DAMAGE, ...) [ID] = { \
+  .name = dn_string_literal(NAME), \
+  .id = ID, \
+  .damage = DAMAGE, \
+  .energy = { \
+    __VA_ARGS__ \
+  } \
+}
+sp_move_t sp_moves [] = {
+  SP_DEFINE_MOVE(SP_MOVE_NONE, "None", 0),
+  SP_DEFINE_MOVE(SP_MOVE_BULBASAUR_VINE_WHIP, "Vine Whip", 30, SP_POKEMON_TYPE_GRASS, SP_POKEMON_TYPE_COLORLESS),
+  SP_DEFINE_MOVE(SP_MOVE_WEEDLE_STING, "Sting", 20, SP_POKEMON_TYPE_GRASS),
+  SP_DEFINE_MOVE(SP_MOVE_ODDISH_RAM, "Ram", 20, SP_POKEMON_TYPE_GRASS),
+};
 #endif
 
 ////////////////////
@@ -449,10 +504,16 @@ sp_card_id_t* sp_card_iter_get_ptr(sp_card_iter_t* it) {
 // SP DECK //
 /////////////
 sp_deck_count_t sp_deck_count(sp_deck_t* deck) {
+	return sp_deck_count_from_pile(deck->cards, SP_DECK_SIZE);
+}
+
+sp_deck_count_t sp_deck_count_from_pile(sp_card_id_t* cards, u32 num_cards) {
   sp_deck_count_t count = dn_zero_initialize();
-  dn_for(index, 20) {
-    sp_deck_count_add(&count, deck->cards[index]);
+  dn_for(index, num_cards) {
+    sp_deck_count_add(&count, cards[index]);
   }
+
+  qsort(count.cards, SP_DECK_SIZE, sizeof(sp_deck_count_item_t), sp_deck_count_sort_kernel_alphabetical);
 
   return count;
 }
@@ -511,6 +572,17 @@ void sp_deck_count_remove_active_cards(sp_deck_count_t* count, sp_field_card_t* 
   }  
 }
 
+s32 sp_deck_count_sort_kernel_alphabetical(const void* a, const void* b) {
+  const sp_deck_count_item_t* ia = (const sp_deck_count_item_t*)a;
+  const sp_deck_count_item_t* ib = (const sp_deck_count_item_t*)b;
+  if (ia->card == SP_CARD_NONE && ib->card == SP_CARD_NONE) return DN_QSORT_EQUAL;
+  if (ia->card == SP_CARD_NONE) return DN_QSORT_B_FIRST;
+  if (ib->card == SP_CARD_NONE) return DN_QSORT_A_FIRST;
+  if (ia->card < ib->card) return DN_QSORT_A_FIRST;
+  if (ia->card > ib->card) return DN_QSORT_B_FIRST;
+  return DN_QSORT_EQUAL;
+}
+
 void sp_deck_print_ordered(sp_deck_t* deck) {
   sp_for_card(it, deck->cards) {
     sp_card_t card = sp_cards[sp_card_iter_get(&it)];
@@ -560,12 +632,9 @@ void sp_match_init(sp_match_t* match, sp_deck_t decks [2]) {
     sp_player_t* player = &match->players[i];
     sp_player_init(player, deck);
     player->turn_order = sp_match_turn_order(match, player);
-    player->match_state = SP_PLAYER_MATCH_STATE_READY;
+    player->state = SP_PLAYER_STATE_SETUP;
 
-    while (!sp_player_is_starting_hand_valid(player)) {
-      sp_player_shuffle_hand_into_deck(player);
-      sp_player_draw_n(player, 5);
-    }
+		sp_player_draw_opening_hand(player);
 
     sp_player_generate_energy(player);
     if (sp_match_is_player_first(match, player)) {
@@ -589,10 +658,7 @@ sp_turn_order_t sp_match_turn_order(sp_match_t* match, sp_player_t* player) {
   return SP_TURN_ORDER_SECOND;
 }
 
-dn_dynamic_array(sp_match_action_t) sp_match_calc_hand_actions(sp_match_t* match, sp_player_t* player, sp_card_location_t slot) {
-  dn_dynamic_array_t actions = dn_zero_initialize();
-  dn_dynamic_array_init(&actions, sizeof(sp_match_action_t), &dn_allocators.bump.allocator);
-
+void sp_match_calc_hand_actions(sp_match_t* match, sp_player_t* player, sp_card_location_t slot, dn_dynamic_array_t* actions) {
   sp_card_id_t card = sp_player_find_card(player, slot);
 
   switch (match->state) {
@@ -606,9 +672,9 @@ dn_dynamic_array(sp_match_action_t) sp_match_calc_hand_actions(sp_match_t* match
 
       dn_for_arr(locations, index) {
         if (!sp_player_is_location_occupied(player, locations[index])) {
-          dn_dynamic_array_push(&actions, &(sp_match_action_t){
-            .kind = SP_MATCH_ACTION_SETUP,
-            .setup = {
+          dn_dynamic_array_push(actions, &(sp_match_action_t){
+            .kind = SP_MATCH_ACTION_SETUP_PLAY_BASIC,
+            .play_basic = {
               .location = locations[index],
               .card = card
             }
@@ -618,63 +684,104 @@ dn_dynamic_array(sp_match_action_t) sp_match_calc_hand_actions(sp_match_t* match
 
       break;
     }
+		case SP_MATCH_STATE_TURN: {
+			sp_card_location_t locations [] = {
+        { .pile = SP_CARD_PILE_BENCH, .slot = 0 },
+        { .pile = SP_CARD_PILE_BENCH, .slot = 1 },
+        { .pile = SP_CARD_PILE_BENCH, .slot = 2 },
+      };
+
+      dn_for_arr(locations, index) {
+        if (!sp_player_is_location_occupied(player, locations[index])) {
+          dn_dynamic_array_push(actions, &(sp_match_action_t){
+            .kind = SP_MATCH_ACTION_PLAY_BASIC,
+            .play_basic = {
+              .location = locations[index],
+              .card = card
+            }
+          });
+        }
+      }
+      break;
+		}
     default: {
       DN_UNREACHABLE();
       break;
     }
   }
-
-  return actions;
 }
 
-dn_dynamic_array(sp_match_action_t) sp_match_calc_field_actions(sp_match_t* match, sp_player_t* player, sp_card_location_t card) {
-  dn_dynamic_array_t actions = dn_zero_initialize();
-  dn_dynamic_array_init(&actions, sizeof(sp_match_action_t), &dn_allocators.bump.allocator);
+void sp_match_calc_active_actions(sp_match_t* match, sp_player_t* player, dn_dynamic_array_t* actions) {
+  if (!sp_player_is_location_occupied(player, SP_CARD_LOCATION_ACTIVE())) {
+    return;
+  }
 
-  return actions;
+	sp_pokemon_t* pokemon = sp_find_pokemon(player->active.card);
+	dn_for(index, SP_POKEMON_MAX_MOVES) {
+		if (sp_match_validate_attack(match, player, SP_CARD_LOCATION_ACTIVE(), pokemon->moves[index])) {
+			dn_dynamic_array_push(actions, &(sp_match_action_t) {
+				.kind = SP_MATCH_ACTION_ATTACK,
+				.attack = {
+					.attacker = SP_CARD_LOCATION_ACTIVE(),
+					.target = SP_CARD_LOCATION_ACTIVE(),
+					.move = pokemon->moves[index]
+				}
+			});
+		}
+	}
 }
 
-dn_dynamic_array(sp_match_action_t) sp_match_calc_card_actions(sp_match_t* match, sp_player_t* player, sp_card_location_t location) {
+void sp_match_calc_card_actions(sp_match_t* match, sp_player_t* player, sp_card_location_t location, dn_dynamic_array_t* actions) {
   switch(location.pile) {
     case SP_CARD_PILE_HAND: {
-      return sp_match_calc_hand_actions(match, player, location);
+      sp_match_calc_hand_actions(match, player, location, actions);
+      break;
     }
     case SP_CARD_PILE_ACTIVE: {
-      // return sp_match_calc_active_actions(match, location)
+      return sp_match_calc_active_actions(match, player, actions);
+      break;
     }
     case SP_CARD_PILE_BENCH: {
       // return sp_match_calc_bench_actions(match, location)
+      break;
     }
     default: {
-      return dn_zero_struct(dn_dynamic_array_t);
+      break;
     }
   }
 }
 
-dn_dynamic_array(sp_match_action_t) sp_match_calc_other_actions(sp_match_t* match, sp_player_t* player) {
-  dn_dynamic_array(sp_match_action_t) actions = dn_zero_initialize();
-  dn_dynamic_array_init(&actions, sizeof(sp_match_action_t), &dn_allocators.bump.allocator);
-
-  dn_dynamic_array_push(&actions, &(sp_match_action_t) {
+void sp_match_calc_other_actions(sp_match_t* match, sp_player_t* player, dn_dynamic_array_t* actions) {
+  dn_dynamic_array_push(actions, &(sp_match_action_t) {
     .kind = SP_MATCH_ACTION_CONCEDE
   });
 
-  dn_dynamic_array_push(&actions, &(sp_match_action_t) {
-    .kind = SP_MATCH_ACTION_SETUP_RESET
-  });
+  switch (match->state) {
+    case SP_MATCH_STATE_SETUP: {
+      dn_dynamic_array_push(actions, &(sp_match_action_t) {
+        .kind = SP_MATCH_ACTION_SETUP_RESET
+      });
 
-  return actions;  
+      if (sp_player_is_location_occupied(player, SP_CARD_LOCATION_ACTIVE())) {
+        dn_dynamic_array_push(actions, &(sp_match_action_t) {
+          .kind = SP_MATCH_ACTION_SETUP_READY
+        });
+      }
+      break;
+    }
+    default: {
+      break;
+    }
+  }
+
 }
 
 dn_dynamic_array(sp_match_action_t) sp_match_calc_all_actions(sp_match_t* match, sp_player_t* player, sp_card_location_t card) {
   dn_dynamic_array(sp_match_action_t) actions = dn_zero_initialize();
   dn_dynamic_array_init(&actions, sizeof(sp_match_action_t), &dn_allocators.bump.allocator);
 
-  dn_dynamic_array_t other_actions = sp_match_calc_other_actions(match, player);
-  dn_dynamic_array_push_n(&actions, other_actions.data, other_actions.size);
-
-  dn_dynamic_array_t card_actions = sp_match_calc_card_actions(match, player, card);
-  dn_dynamic_array_push_n(&actions, card_actions.data, card_actions.size);
+  sp_match_calc_other_actions(match, player, &actions);
+  sp_match_calc_card_actions(match, player, card, &actions);
 
   return actions;  
 }
@@ -685,9 +792,9 @@ sp_match_action_result_t sp_match_process_action(sp_match_t* match, sp_player_t*
     .player = player->id
   };
 
-  if (player->match_state != SP_PLAYER_MATCH_STATE_READY) {
+  if (player->state != SP_PLAYER_STATE_SETUP && player->state != SP_PLAYER_STATE_READY) {
     result.status = SP_MATCH_ACTION_STATUS_ERROR;
-    result.kind = SP_MATCH_ACTION_RESULT_NOT_YOUR_TURN;
+    result.kind = SP_MATCH_ACTION_RESULT_INCORRECT_PLAYER_STATE;
     return result;
   }
 
@@ -700,10 +807,11 @@ sp_match_action_result_t sp_match_process_action(sp_match_t* match, sp_player_t*
     	result.kind = SP_MATCH_ACTION_RESULT_GAME_OVER;
     	return result;
 		}
-    case SP_MATCH_ACTION_SETUP: {
+    case SP_MATCH_ACTION_SETUP_PLAY_BASIC: {
       DN_ASSERT(match->state == SP_MATCH_STATE_SETUP);
+      DN_ASSERT(player->state == SP_PLAYER_STATE_SETUP);
 
-      sp_match_action_setup_data_t* data = &action->setup;
+      sp_match_action_play_basic_data_t* data = &action->play_basic;
 
       if (sp_player_is_location_occupied(player, data->location)) {
         result.status = SP_MATCH_ACTION_STATUS_ERROR;
@@ -715,13 +823,14 @@ sp_match_action_result_t sp_match_process_action(sp_match_t* match, sp_player_t*
       sp_player_play_card_to_field(player, data->card, data->location);
 
       result.status = SP_MATCH_ACTION_STATUS_OK;
-      result.kind = SP_MATCH_ACTION_RESULT_SETUP_PLAY_BASIC;
+      result.kind = SP_MATCH_ACTION_RESULT_PLAY_BASIC;
       return result;
 
       break;
     }
     case SP_MATCH_ACTION_SETUP_RESET: {
       DN_ASSERT(match->state == SP_MATCH_STATE_SETUP);
+      DN_ASSERT(player->state == SP_PLAYER_STATE_SETUP);
 
       sp_card_location_t locations [] = {
         { .pile = SP_CARD_PILE_ACTIVE },
@@ -740,6 +849,66 @@ sp_match_action_result_t sp_match_process_action(sp_match_t* match, sp_player_t*
 
       result.status = SP_MATCH_ACTION_STATUS_OK;
       result.kind = SP_MATCH_ACTION_RESULT_SETUP_RESET;
+      return result;
+
+      break;
+    }
+    case SP_MATCH_ACTION_SETUP_READY: {
+      DN_SOFT_ASSERT(match->state == SP_MATCH_STATE_SETUP);
+      DN_SOFT_ASSERT(player->state == SP_PLAYER_STATE_SETUP);
+
+      player->state = SP_PLAYER_STATE_WAIT;
+
+      sp_player_t* opponent = sp_match_find_opponent(match, player->id);
+      if (opponent->state == SP_PLAYER_STATE_WAIT) {
+        match->state = SP_MATCH_STATE_TURN;
+				match->turn = 1;
+        sp_match_going_first(match)->state = SP_PLAYER_STATE_READY;
+        sp_match_going_second(match)->state = SP_PLAYER_STATE_WAIT;
+      }
+
+      result.status = SP_MATCH_ACTION_STATUS_NONE;
+      return result;
+
+      break;
+    }
+    case SP_MATCH_ACTION_PLAY_BASIC: {
+      DN_ASSERT(match->state == SP_MATCH_STATE_TURN);
+      DN_ASSERT(player->state == SP_PLAYER_STATE_READY);
+
+      sp_match_action_play_basic_data_t* data = &action->play_basic;
+
+      if (sp_player_is_location_occupied(player, data->location)) {
+        result.status = SP_MATCH_ACTION_STATUS_ERROR;
+        result.kind = SP_MATCH_ACTION_RESULT_SLOT_OCCUPIED;
+        return result;
+      }
+
+      sp_player_remove_from_hand(player, data->card);
+      sp_player_play_card_to_field(player, data->card, data->location);
+
+      result.status = SP_MATCH_ACTION_STATUS_OK;
+      result.kind = SP_MATCH_ACTION_RESULT_PLAY_BASIC;
+      return result;
+
+      break;
+    }
+    case SP_MATCH_ACTION_ATTACK: {
+      sp_match_action_attack_data_t* data = &action->attack;
+
+      if (!sp_match_validate_attack(match, player, data->attacker, data->move)) {
+        result.status = SP_MATCH_ACTION_STATUS_ERROR;
+        result.kind = SP_MATCH_ACTION_RESULT_ATTACK;
+        return result;
+      }
+
+      result.status = SP_MATCH_ACTION_STATUS_OK;
+      result.kind = SP_MATCH_ACTION_RESULT_ATTACK;
+      result.attack = (sp_match_action_attack_result_t) {
+        .damage = sp_find_move(data->move)->damage,
+        .weakness = false,
+        .knockout = false
+      };
       return result;
 
       break;
@@ -794,6 +963,81 @@ sp_field_card_t* sp_match_find_field_card(sp_match_t* match, sp_card_location_t 
 
   return NULL;
 }
+
+sp_player_t* sp_match_going_first(sp_match_t* match) {
+  switch (match->order_flip) {
+    case SP_RNG_FLIP_HEADS: return sp_match_find_player(match, SP_PLAYER_ID_0);
+    case SP_RNG_FLIP_TAILS: return sp_match_find_player(match, SP_PLAYER_ID_1);
+    default: DN_UNREACHABLE();
+  }
+}
+
+sp_player_t* sp_match_going_second(sp_match_t* match) {
+  switch (match->order_flip) {
+    case SP_RNG_FLIP_HEADS: return sp_match_find_player(match, SP_PLAYER_ID_1);
+    case SP_RNG_FLIP_TAILS: return sp_match_find_player(match, SP_PLAYER_ID_0);
+    default: DN_UNREACHABLE();
+  }
+}
+
+bool sp_match_validate_attack(sp_match_t* match, sp_player_t* player, sp_card_location_t location, sp_move_id_t move) {
+	if (!sp_match_validate_attack_exists(match, player, location, move)) return false;
+	if (!sp_match_validate_attack_energy(match, player, location, move)) return false;
+	return true;
+}
+
+bool sp_match_validate_attack_exists(sp_match_t* match, sp_player_t* player, sp_card_location_t location, sp_move_id_t move) {
+	sp_pokemon_t* pokemon = sp_find_pokemon(sp_player_find_card(player, location));
+
+	dn_for(index, SP_POKEMON_MAX_MOVES) {
+		if (move == pokemon->moves[index]) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool sp_match_validate_attack_energy(sp_match_t* match, sp_player_t* player, sp_card_location_t location, sp_move_id_t move_id) {
+	sp_energy_count_t attached = sp_match_count_attached_energy(match, player, location);
+	sp_energy_count_t required = sp_match_count_required_energy(match, player, move_id);
+
+	dn_for(energy, SP_POKEMON_TYPE_COUNT) {
+		if (attached.energy[energy] < required.energy[energy]) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+sp_energy_count_t sp_match_count_attached_energy(sp_match_t* match, sp_player_t* player, sp_card_location_t location) {
+	sp_energy_count_t count = dn_zero_initialize();
+	sp_field_card_t* card = sp_player_find_field_card(player, location);
+
+	dn_for(index, SP_MAX_ATTACHED_ENERGY) {
+		sp_pokemon_type_t energy = card->energy[index];
+		if (energy == SP_POKEMON_TYPE_NONE) break;
+
+		count.energy[energy]++;
+	}
+
+	return count;
+}
+
+sp_energy_count_t sp_match_count_required_energy(sp_match_t* match, sp_player_t* player, sp_move_id_t move_id) {
+	sp_energy_count_t count = dn_zero_initialize();
+	sp_move_t* move = sp_find_move(move_id);
+
+	dn_for(index, SP_POKEMON_MOVE_MAX_ENERGY) {
+		sp_pokemon_type_t energy = move->energy[index];
+		if (energy == SP_POKEMON_TYPE_NONE) break;
+
+		count.energy[energy]++;
+	}
+
+	return count;
+}
+
 
 ///////////////
 // SP PLAYER //
@@ -866,6 +1110,15 @@ void sp_player_draw_n(sp_player_t* player, u32 num_cards) {
   dn_for(i, num_cards) {
     sp_player_draw(player);
   }
+}
+
+void sp_player_draw_opening_hand(sp_player_t* player) {
+	sp_player_shuffle(player);
+
+	while (!sp_player_is_starting_hand_valid(player)) {
+		sp_player_shuffle_hand_into_deck(player);
+		sp_player_draw_n(player, 5);
+	}
 }
 
 bool sp_player_is_starting_hand_valid(sp_player_t* player) {
@@ -1010,6 +1263,10 @@ void sp_player_set_active(sp_player_t* player, sp_card_id_t card) {
   };
 }
 
+bool sp_player_is_actionable(sp_player_t* player) {
+	return player->state == SP_PLAYER_STATE_READY || player->state == SP_PLAYER_STATE_SETUP;
+}
+
 void sp_rng_init() {
   sp_rng.seed = time(NULL);
   srand(sp_rng.seed);
@@ -1047,6 +1304,14 @@ u32 sp_rng_pick_from_set(u32* options, u32 num_options) {
 
 sp_card_t* sp_find_card(sp_card_id_t card) {
   return &sp_cards[card];
+}
+
+sp_pokemon_t* sp_find_pokemon(sp_card_id_t card) {
+	return &sp_find_card(card)->pokemon;
+}
+
+sp_move_t* sp_find_move(sp_move_id_t id) {
+	return &sp_moves[id];
 }
 
 dn_string_t sp_find_card_name(sp_card_id_t card) {

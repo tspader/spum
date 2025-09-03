@@ -26,6 +26,9 @@
     "xtree": "c",
     "xutility": "c",
     "network.h": "c",
-    "sokol_imgui.h": "c"
+    "sokol_imgui.h": "c",
+    "lua.h": "c",
+    "lauxlib.h": "c",
+    "server.h": "c"
   }
 }
